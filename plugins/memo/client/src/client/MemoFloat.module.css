@@ -1,0 +1,111 @@
+.float {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 30;
+  width: min(420px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 16px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-shadow-lv3);
+  color-scheme: light dark;
+  font-family: inherit;
+  pointer-events: auto;
+}
+
+.collapsed { width: min(420px, calc(100vw - 36px)); }
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-specific-tip);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.header:active { cursor: grabbing; }
+.title { flex: none; color: var(--dsw-alias-label-primary); font-size: 14px; font-weight: 700; letter-spacing: .02em; }
+.preview { flex: 1; min-width: 0; overflow: hidden; color: var(--dsw-alias-label-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+.button {
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 9px;
+  padding: 6px 9px;
+  background: var(--dsw-alias-button-floating-fill);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.button:hover:not(:disabled) { background: var(--dsw-alias-button-floating-hover); }
+.button:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+.button:disabled { cursor: not-allowed; opacity: .55; }
+.body { max-height: calc(100vh - 100px); padding: 12px; overflow: auto; background: var(--dsw-alias-bg-layer-1); }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+
+.zone {
+  min-height: 122px;
+  padding: 9px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 94%, var(--memo-zone) 6%);
+}
+
+.active { outline: 2px solid var(--memo-zone); outline-offset: -1px; }
+.zoneHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; cursor: pointer; }
+.zoneName { color: var(--memo-zone); font-size: 12px; font-weight: 700; }
+.count { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.list { display: flex; flex-direction: column; gap: 5px; }
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 7px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.text { flex: 1; overflow-wrap: anywhere; white-space: pre-wrap; }
+.delete { flex: none; border: 0; padding: 0 2px; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; font-size: 14px; }
+.delete:hover:not(:disabled) { color: var(--dsw-alias-state-error-primary); }
+.empty { padding: 8px 2px; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.compose { display: flex; gap: 7px; margin-top: 10px; }
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  outline: none;
+  background: var(--dsw-specific-input-major);
+  color: var(--dsw-alias-label-primary);
+  caret-color: var(--dsw-alias-state-business-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.input::placeholder { color: var(--dsw-alias-label-caption); }
+.input:focus { border-color: var(--dsw-alias-state-business-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent); }
+.add { border-color: transparent; background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-label-primary-foreground); font-weight: 700; }
+.add:hover:not(:disabled) { background: var(--dsw-alias-button-info-hover); }
+.error { margin: 8px 2px 0; color: var(--dsw-alias-state-error-primary); font-size: 11px; }
+.path { margin: 8px 2px 0; color: var(--dsw-alias-label-caption); font-size: 10px; }
+
+@media (max-width: 560px) {
+  .float, .collapsed { top: 10px; right: 10px; width: calc(100vw - 20px); }
+  .grid { grid-template-columns: 1fr; }
+}

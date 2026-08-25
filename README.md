@@ -7,6 +7,7 @@ A community-oriented collection of plugins and UI extensions for [DeepSeek Harne
 | Plugin | Description | Status |
 | --- | --- | --- |
 | [Memo](./plugins/memo) | Persistent, draggable four-zone memo window with light/dark theme support | Available |
+| [Skill Fuzzy Match](./plugins/skill-fuzzy-match) | Make the `/` slash menu match skills by subsequence (e.g. `/web` finds `coding-web-search`), not only by name prefix | Available |
 
 ## Repository layout
 

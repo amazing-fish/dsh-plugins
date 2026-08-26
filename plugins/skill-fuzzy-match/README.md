@@ -2,7 +2,7 @@
 
 Make the DSH `/` slash menu match **skills** by ordered-subsequence fuzzy match instead of strict `startsWith` prefix match.
 
-> **This plugin is published as an npm package:** [`@amazing-fish/dsh-plugin-skill-fuzzy-match`](https://github.com/users/amazing-fish/packages/npm/package/dsh-plugin-skill-fuzzy-match) (GitHub Packages). The files in this directory mirror the published package (`index.mjs` + `package.json`). Prefer installing the package over copying the source.
+> **npm package:** [`@amazing-fish/dsh-plugin-skill-fuzzy-match`](https://github.com/users/amazing-fish/packages/npm/package/dsh-plugin-skill-fuzzy-match) (GitHub Packages). The files in this directory mirror the published package (`client.js` + `package.json`). Prefer installing the package over copying the source.
 
 ## Problem
 
@@ -50,15 +50,15 @@ Restart DSH (or reload the profile) to mount it. This is the **persistent** path
 
 This directory mirrors the published npm package:
 
-- `index.mjs` — the client plugin body (ESM, `export default { inject, apply }`)
-- `package.json` — npm package metadata (`publishConfig.registry = https://npm.pkg.github.com`)
-- `README.md` — this file
+- `client.js` — the client plugin entry, a **classic script** that calls `window.__ModuleLoader__.load({ id, factory })` and the factory returns `{ inject, apply }`. DSH loads browser client plugins via `<script src>` (`dsh-client-modules`), **not** `import()` — so the entry must be a classic script, not ESM `export default`.
+- `package.json` — npm package metadata. Declares `dsh.client.platform: "web"` (so DSH loads it as a client plugin, not a host plugin) and `exports["./client"]: "./client.js"` (the client entry DSH resolves).
+- `README.md` — this file.
 
 ## How it works
 
 `dsh-client-ui-skill` already registered a `/` source named `skill`. Re-registering the same `(trigger, name)` throws, so this plugin monkey-patches the live source object's `candidates` field instead. It reuses the original catalog fetch (calling the original `candidates` with an empty query returns the full skill list, since `startsWith('')` is true for every name) and then filters/ranks locally with `fuzzyScore`. No duplicate fetch, no new network calls.
 
-It injects `inputTriggers` (to access the source registry) and `timer` (to retry briefly if the skill source registers after the plugin loads).
+It injects `inputTriggers` (provided by `@deepseek-ai/dsh-client-ui-input-trigger`) to access the source registry, and uses `ctx.interval`/`ctx.effect` (Cordis Context built-ins) to retry briefly if the skill source registers after the plugin loads.
 
 ## Verify
 
@@ -70,9 +70,15 @@ window.__skillFuzzyPatched   // true once patched
 
 You should also see `[skill-fuzzy] PATCHED skill source candidates ...`. Then typing `/sql`, `/memory`, `/web` in the slash menu surfaces `dataworks-sql-runner`, `openviking-memory`, `coding-web-search` respectively.
 
+## Changelog
+
+- **0.1.2** — Fix boot failure. Entry changed from ESM `export default` (index.mjs) to a classic script `client.js` using `window.__ModuleLoader__.load`. `package.json` now declares `dsh.client.platform: "web"` and `exports["./client"]`, so DSH loads it correctly as a **client** plugin. Earlier 0.1.1 lacked the `dsh.client` block and was loaded as a host plugin, where `inputTriggers` never registers → entry pending → `assertEntriesActivated` fails → boot exits.
+- **0.1.1** — Republished as ESM (`index.mjs` + `export default`). Broken: DSH `dsh-client-modules` loads client plugins via `<script src>`, which cannot consume ESM exports.
+- **0.1.0** — Initial CommonJS release. Broken for the same reason.
+
 ## Alternative: dynamic plugin (temporary, per-process)
 
-You can also load it through the DSH dynamic Cordis plugin tooling (`cordis_define` + `cordis_run`) by pasting the body of `index.mjs` into `code.client` (change `export default {...}` to `return {...}`). The patch takes effect immediately in the current process and is undone on stop/unload. **Dynamic plugins do not survive a DSH process restart** — for persistence, use the npm install path above.
+You can also load it through the DSH dynamic Cordis plugin tooling (`cordis_define` + `cordis_run`) by pasting the plugin body into `code.client` (use the `factory` return value `{ inject, apply }` directly as `return { inject, apply }`). The patch takes effect immediately in the current process and is undone on stop/unload. **Dynamic plugins do not survive a DSH process restart** — for persistence, use the npm install path above.
 
 ## Upstream
 

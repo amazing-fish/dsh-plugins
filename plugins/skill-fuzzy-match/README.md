@@ -1,6 +1,8 @@
-# Skill Fuzzy Match Plugin
+# Skill Fuzzy Match
 
 Make the DSH `/` slash menu match **skills** by ordered-subsequence fuzzy match instead of strict `startsWith` prefix match.
+
+> **This plugin is published as an npm package:** [`@amazing-fish/dsh-plugin-skill-fuzzy-match`](https://github.com/users/amazing-fish/packages/npm/package/dsh-plugin-skill-fuzzy-match) (GitHub Packages). The files in this directory mirror the published package (`index.mjs` + `package.json`). Prefer installing the package over copying the source.
 
 ## Problem
 
@@ -20,33 +22,61 @@ Patches the live `/skill` source's `candidates` method in place to use the **sam
 
 The original `candidates` is restored when the plugin is stopped, updated, or unloaded.
 
+## Install (npm / GitHub Packages)
+
+Configure the `@amazing-fish` scope, then install:
+
+```ini
+# ~/.npmrc
+@amazing-fish:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+```bash
+pnpm add @amazing-fish/dsh-plugin-skill-fuzzy-match
+```
+
+Then add a plugin row to your DSH profile's `cordis.patch.yml`:
+
+```yaml
+- insert:
+    - id: ui-skill-fuzzy
+      name: '@amazing-fish/dsh-plugin-skill-fuzzy-match'
+```
+
+Restart DSH (or reload the profile) to mount it. This is the **persistent** path — the plugin survives DSH restarts.
+
+## Files
+
+This directory mirrors the published npm package:
+
+- `index.mjs` — the client plugin body (ESM, `export default { inject, apply }`)
+- `package.json` — npm package metadata (`publishConfig.registry = https://npm.pkg.github.com`)
+- `README.md` — this file
+
 ## How it works
 
 `dsh-client-ui-skill` already registered a `/` source named `skill`. Re-registering the same `(trigger, name)` throws, so this plugin monkey-patches the live source object's `candidates` field instead. It reuses the original catalog fetch (calling the original `candidates` with an empty query returns the full skill list, since `startsWith('')` is true for every name) and then filters/ranks locally with `fuzzyScore`. No duplicate fetch, no new network calls.
 
 It injects `inputTriggers` (to access the source registry) and `timer` (to retry briefly if the skill source registers after the plugin loads).
 
-## Files
+## Verify
 
-- `client/src/index.js` — the client plugin body (plain JavaScript; no build step)
-
-## Usage
-
-### As a dynamic plugin (temporary, per-process)
-
-Load it through the DSH dynamic Cordis plugin tooling (`cordis_define` + `cordis_run`) with `code.client` set to the contents of `client/src/index.js`. The patch takes effect immediately in the current process and is undone on stop/unload. Dynamic plugins do not survive a DSH process restart.
-
-Verify in the browser DevTools console:
+After mounting, check the browser DevTools console:
 
 ```js
 window.__skillFuzzyPatched   // true once patched
 ```
 
-You should also see `[skill-fuzzy] PATCHED skill source candidates ...` in the console. Then typing `/sql`, `/memory`, `/web` in the slash menu surfaces `dataworks-sql-runner`, `openviking-memory`, `coding-web-search` respectively.
+You should also see `[skill-fuzzy] PATCHED skill source candidates ...`. Then typing `/sql`, `/memory`, `/web` in the slash menu surfaces `dataworks-sql-runner`, `openviking-memory`, `coding-web-search` respectively.
 
-### Permanent integration
+## Alternative: dynamic plugin (temporary, per-process)
 
-For a permanent fix that survives restarts, the matching logic should be changed in the DSH source itself (`packages/client/ui-skill` in `deepseek-ai/deepseek-harness`) — reuse the `fuzzyScore`/`boundaryBonus` already present in `packages/client/ui-commands`. See the upstream discussion: <https://github.com/deepseek-ai/deepseek-harness/discussions/4490>.
+You can also load it through the DSH dynamic Cordis plugin tooling (`cordis_define` + `cordis_run`) by pasting the body of `index.mjs` into `code.client` (change `export default {...}` to `return {...}`). The patch takes effect immediately in the current process and is undone on stop/unload. **Dynamic plugins do not survive a DSH process restart** — for persistence, use the npm install path above.
+
+## Upstream
+
+For a permanent fix in DSH itself, the skill source should reuse `fuzzyScore`/`boundaryBonus` directly in `packages/client/ui-skill` of `deepseek-ai/deepseek-harness`. See the upstream discussion: <https://github.com/deepseek-ai/deepseek-harness/discussions/4490>.
 
 ## Compatibility
 

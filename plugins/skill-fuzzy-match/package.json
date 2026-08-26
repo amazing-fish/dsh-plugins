@@ -1,14 +1,22 @@
 {
   "name": "@amazing-fish/dsh-plugin-skill-fuzzy-match",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "DSH client Cordis plugin: make the '/' slash menu match skills by ordered-subsequence fuzzy match (e.g. /web finds coding-web-search) instead of strict name-prefix startsWith.",
-  "type": "module",
   "exports": {
-    ".": "./index.mjs",
+    ".": "./client.js",
+    "./client": "./client.js",
     "./package.json": "./package.json"
   },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-input-trigger"
+      ]
+    }
+  },
   "files": [
-    "index.mjs",
+    "client.js",
     "README.md"
   ],
   "keywords": [

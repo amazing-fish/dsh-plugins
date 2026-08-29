@@ -1,0 +1,40 @@
+# openai 503-body message passthrough patch for DSH
+#
+# Root cause: upstream 503 queue responses carry a non-standard body
+# `{code, message}` (no `error` wrapper). The JS OpenAI SDK's
+# APIError.generate() only reads errorResponse['error'], drops the body
+# message, and DSH displays "503 status code (no body)" instead of the
+# human-readable queue notice (e.g. "已为您锁定...").
+#
+# Fix: fall back to errorResponse['message'] when no `error` object exists.
+#
+# NOTE: this diff is anchored to openai@6.26.0 (bundled in @deepseek-ai/dsh
+# 0.1.1-rc.2). Exact line numbers may drift across versions — prefer
+# apply.ps1, which inserts by anchor text and is version-tolerant.
+#
+--- a/node_modules/openai/core/error.mjs
++++ b/node_modules/openai/core/error.mjs
+@@ -36,7 +36,10 @@
+         if (!status || !headers) {
+             return new APIConnectionError({ message, cause: castToError(errorResponse) });
+         }
+         const error = errorResponse?.['error'];
++        if (!error && typeof errorResponse?.['message'] === 'string' && errorResponse['message'].length > 0) {
++            message = errorResponse['message'];
++        }
+         if (status === 400) {
+             return new BadRequestError(status, error, message, headers);
+         }
+--- a/node_modules/openai/core/error.js
++++ b/node_modules/openai/core/error.js
+@@ -40,7 +40,10 @@
+         if (!status || !headers) {
+             return new APIConnectionError({ message, cause: (0, errors_1.castToError)(errorResponse) });
+         }
+         const error = errorResponse?.['error'];
++        if (!error && typeof errorResponse?.['message'] === 'string' && errorResponse['message'].length > 0) {
++            message = errorResponse['message'];
++        }
+         if (status === 400) {
+             return new BadRequestError(status, error, message, headers);
+         }

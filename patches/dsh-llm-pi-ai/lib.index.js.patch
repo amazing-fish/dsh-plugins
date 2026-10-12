@@ -1,0 +1,66 @@
+diff --git a/@deepseek-ai/dsh-llm-pi-ai/lib/index.js b/@deepseek-ai/dsh-llm-pi-ai/lib/index.js
+index 0c74b3a..7a6e463 100644
+--- a/@deepseek-ai/dsh-llm-pi-ai/lib/index.js
++++ b/@deepseek-ai/dsh-llm-pi-ai/lib/index.js
+@@ -1411,10 +1411,10 @@ function mapStopReason(message, contextWindow) {
+ 	};
+ 	switch (message.stopReason) {
+ 		case "stop":
+-			if (message.content.length === 0) return {
++			if (message.content.length === 0 || message.content.every((block) => block.type === "thinking")) return {
+ 				kind: "error",
+ 				failure: {
+-					message: `model "${message.model}" returned a completed response with no content`,
++					message: `model "${message.model}" returned a completed response with no content${message.content.length > 0 ? " (reasoning only)" : ""}`,
+ 					code: EMPTY_RESPONSE_CODE
+ 				}
+ 			};
+@@ -1733,13 +1733,36 @@ function reasoningInfo(model, defaultLevel) {
+ 		...defaultLevel === void 0 ? {} : { defaultEffort: ReasoningEffortId(defaultLevel) }
+ 	} };
+ }
++/** opencode-camo: target gateways mapped to the real opencode client UA for each. */
++const OPENCODE_CAMO_TARGETS = [
++	{ host: "<your-gateway-1.internal.example", userAgent: "yw-opencode/1.16.64 ai-sdk/provider-utils/4.0.27 runtime/bun/1" },
++	{ host: "<your-gateway-2.internal.example", userAgent: "opencode/1.16.64 ai-sdk/provider-utils/4.0.27 runtime/bun/1" }
++];
++/** opencode-camo: resolve the camo UA for a base URL, or undefined when not a target gateway. */
++let opencodeCamoLogged = false;
++function opencodeCamoUserAgent(baseUrl) {
++	try {
++		const url = new URL(baseUrl);
++		for (const target of OPENCODE_CAMO_TARGETS) {
++			if (url.hostname === target.host || url.hostname.endsWith("." + target.host)) {
++				if (!opencodeCamoLogged) {
++					opencodeCamoLogged = true;
++					console.log(`[dsh-llm-pi-ai] opencode UA camo active: ${url.origin} -> ${target.userAgent}`);
++				}
++				return target.userAgent;
++			}
++		}
++	} catch {}
++	return void 0;
++}
+ /** Merge deployment headers while removing case-insensitive attribution collisions. */
+-function requestHeaders(headers) {
++function requestHeaders(headers, camoUserAgent) {
+ 	const attribution = attributionHeaders();
+ 	const reserved = new Set(Object.keys(attribution).map((name) => name.toLowerCase()));
+ 	return {
+ 		...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
+-		...attribution
++		...attribution,
++		...(camoUserAgent !== void 0 ? { "user-agent": camoUserAgent } : {})
+ 	};
+ }
+ /**
+@@ -1884,7 +1907,7 @@ var PiAiAdapter = class extends LlmAdapter {
+ 					...options.maxTokens === void 0 ? {} : { maxTokens: options.maxTokens },
+ 					...options.sessionId === void 0 ? {} : { sessionId: String(options.sessionId) },
+ 					signal: watchdog.signal,
+-					headers: requestHeaders(profile.headers)
++					headers: requestHeaders(profile.headers, opencodeCamoUserAgent(profile.baseURL))
+ 				}), model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]();
+ 				let exhausted = false;
+ 				try {
+

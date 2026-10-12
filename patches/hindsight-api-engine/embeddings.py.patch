@@ -1,0 +1,53 @@
+diff --git a/hindsight_api/engine/embeddings.py b/hindsight_api/engine/embeddings.py
+index 3b6b8c8..22694ab 100644
+--- a/hindsight_api/engine/embeddings.py
++++ b/hindsight_api/engine/embeddings.py
+@@ -406,7 +406,20 @@ class OnnxEmbeddings(Embeddings):
+             self.normalize,
+         )
+         self._tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name_or_path)
+-        self._session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
++        # Cap the intra-op threadpool (ORT default = ALL physical cores, which
++        # saturates the desktop on every retain/embedding burst). Tunable via
++        # HINDSIGHT_ONNX_INTRA_THREADS; 0 restores the ORT default.
++        _sess_options = ort.SessionOptions()
++        _intra = int(os.environ.get("HINDSIGHT_ONNX_INTRA_THREADS", "4") or 4)
++        if _intra > 0:
++            _sess_options.intra_op_num_threads = _intra
++            _sess_options.inter_op_num_threads = 1
++            try:
++                _sess_options.add_session_config_entry("session.intra_op.allow_spinning", "0")
++            except Exception:
++                pass
++        self._session = ort.InferenceSession(model_path, sess_options=_sess_options, providers=["CPUExecutionProvider"])
++        logger.info("Embeddings: ONNX intra_op threads capped at %s", _intra if _intra > 0 else "ORT default")
+ 
+         detected = len(self.encode(["test"])[0])
+         if self.configured_dimensions is not None and detected != self.configured_dimensions:
+@@ -422,6 +435,26 @@ class OnnxEmbeddings(Embeddings):
+         if not texts:
+             return []
+ 
++        # 2026-09-08 local patch: chunk large batches before running the ONNX graph.
++        # The retain/import pipeline passes whole-document observation batches (100+
++        # texts) and attention buffers scale batch x heads x seq^2 — a 124-text batch
++        # at 512 tokens made BFCArena request a 1.5GB contiguous allocation and fail.
++        # Chunking bounds peak memory; chunks also pad to their own longest sequence.
++        import os as _os
++
++        _chunk_env = _os.environ.get("HINDSIGHT_API_EMBEDDINGS_ONNX_ENCODE_CHUNK", "")
++        try:
++            _chunk = max(1, int(_chunk_env)) if _chunk_env.strip() else 16
++        except ValueError:
++            _chunk = 16
++        if len(texts) > _chunk:
++            _results: list[list[float]] = []
++            for _i in range(0, len(texts), _chunk):
++                _results.extend(self._encode_single_batch(texts[_i : _i + _chunk]))
++            return _results
++        return self._encode_single_batch(texts)
++
++    def _encode_single_batch(self, texts: list[str]) -> list[list[float]]:
+         import numpy as np
+ 
+         encoded = self._tokenizer(

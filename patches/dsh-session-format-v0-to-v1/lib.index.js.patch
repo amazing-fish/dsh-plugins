@@ -1,0 +1,169 @@
+diff --git a/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js b/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js
+index 5f8121a..d1f96cb 100644
+--- a/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js
++++ b/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js
+@@ -72,6 +72,12 @@ const RELEASED_V0_EVENT_DISPOSITIONS = Object.freeze({
+ 		"rawOutput",
+ 		"llmStreamCall"
+ 	]),
++	"cron/change": disposition(["version", "operation"], [
++		"id",
++		"next_at",
++		"record",
++		"suggestion"
++	]),
+ 	"feedback/record": disposition(["text"]),
+ 	"goal/change": disposition([
+ 		"kind",
+@@ -348,6 +354,9 @@ function assertReleasedPayloadSemantics(event, version) {
+ 			if (data["rawOutput"] !== void 0) contentBlocksValue(data["rawOutput"], `${label} rawOutput`, version);
+ 			if (data["llmStreamCall"] !== void 0) literalValue(data["llmStreamCall"], [true], `${label} llmStreamCall`);
+ 			return;
++		case "cron/change":
++			cronChangeValue(data, label);
++			return;
+ 		case "feedback/record":
+ 			nonEmptyString(data["text"], `${label} text`);
+ 			return;
+@@ -945,8 +954,7 @@ function pluginSourceValue(source, label) {
+ 		stringValue(section["text"], `${memberLabel} text`);
+ 	});
+ 	else if (source["sections"] !== void 0) throw new SessionFormatError(`${label} sections require snapshot form`);
+-	if (form === "notice") stringValue(source["summary"], `${label} summary`);
+-	else if (source["summary"] !== void 0) throw new SessionFormatError(`${label} summary requires notice form`);
++	if (source["summary"] !== void 0) stringValue(source["summary"], `${label} summary`);
+ }
+ function sessionReferenceSourceValue(source, label, version) {
+ 	assertReleasedV0Keys(source, [
+@@ -1212,6 +1220,111 @@ function goalSnapshotValue(value, label) {
+ 		nonEmptyString(reason["message"], `${label} blocked message`);
+ 	} else if (goal["blockedReason"] !== void 0) throw new SessionFormatError(`${label} blockedReason requires blocked phase`);
+ }
++function cronChangeValue(data, label) {
++	literalValue(data["version"], [1], `${label} version`);
++	if (data["operation"] === "create") {
++		assertReleasedV0Keys(data, [
++			"version",
++			"operation",
++			"record"
++		], [], `${label} data`);
++		cronRecordValue(data["record"], `${label} record`);
++		return;
++	}
++	if (data["operation"] === "suggest") {
++		assertReleasedV0Keys(data, [
++			"version",
++			"operation",
++			"suggestion"
++		], [], `${label} data`);
++		cronSuggestionValue(data["suggestion"], `${label} suggestion`);
++		return;
++	}
++	if (data["operation"] === "accept") {
++		assertReleasedV0Keys(data, [
++			"version",
++			"operation",
++			"id",
++			"record"
++		], [], `${label} data`);
++		nonEmptyString(data["id"], `${label} id`);
++		cronRecordValue(data["record"], `${label} record`);
++		return;
++	}
++	assertReleasedV0Keys(data, [
++		"version",
++		"operation",
++		"id"
++	], data["operation"] === "dispatch" ? ["next_at"] : [], `${label} data`);
++	literalValue(data["operation"], ["delete", "reject", "dispatch", "pause", "resume"], `${label} operation`);
++	nonEmptyString(data["id"], `${label} id`);
++	if (data["next_at"] !== void 0) sessionFormatSafeInteger(data["next_at"], `${label} next_at`);
++}
++function cronRecordValue(value, label) {
++	const record = releasedV0Record(value, label);
++	nonEmptyString(record["id"], `${label} id`);
++	stringValue(record["cron"], `${label} cron`);
++	literalValue(record["kind"], ["prompt", "workflow"], `${label} kind`);
++	booleanValue(record["enabled"], `${label} enabled`);
++	sessionFormatSafeInteger(record["created_at"], `${label} created_at`);
++	sessionFormatSafeInteger(record["next_at"], `${label} next_at`);
++	if (record["name"] !== void 0) stringValue(record["name"], `${label} name`);
++	if (record["kind"] === "workflow") {
++		assertReleasedV0Keys(record, [
++			"id",
++			"cron",
++			"kind",
++			"enabled",
++			"created_at",
++			"next_at",
++			"workflow"
++		], ["name", "workflow_args"], label);
++		stringValue(record["workflow"], `${label} workflow`);
++		if (record["workflow_args"] !== void 0) releasedV0Record(record["workflow_args"], `${label} workflow_args`);
++		return;
++	}
++	assertReleasedV0Keys(record, [
++		"id",
++		"cron",
++		"kind",
++		"enabled",
++		"created_at",
++		"next_at",
++		"prompt"
++	], ["name"], label);
++	stringValue(record["prompt"], `${label} prompt`);
++}
++function cronSuggestionValue(value, label) {
++	const suggestion = releasedV0Record(value, label);
++	nonEmptyString(suggestion["id"], `${label} id`);
++	stringValue(suggestion["cron"], `${label} cron`);
++	literalValue(suggestion["kind"], ["prompt", "workflow"], `${label} kind`);
++	stringValue(suggestion["reason"], `${label} reason`);
++	sessionFormatSafeInteger(suggestion["created_at"], `${label} created_at`);
++	if (suggestion["name"] !== void 0) stringValue(suggestion["name"], `${label} name`);
++	if (suggestion["kind"] === "workflow") {
++		assertReleasedV0Keys(suggestion, [
++			"id",
++			"cron",
++			"kind",
++			"reason",
++			"created_at",
++			"workflow"
++		], ["name", "workflow_args"], label);
++		stringValue(suggestion["workflow"], `${label} workflow`);
++		if (suggestion["workflow_args"] !== void 0) releasedV0Record(suggestion["workflow_args"], `${label} workflow_args`);
++		return;
++	}
++	assertReleasedV0Keys(suggestion, [
++		"id",
++		"cron",
++		"kind",
++		"reason",
++		"created_at",
++		"prompt"
++	], ["name"], label);
++	stringValue(suggestion["prompt"], `${label} prompt`);
++}
+ function scheduleChangeValue(data, label) {
+ 	literalValue(data["version"], [1], `${label} version`);
+ 	if (data["operation"] === "create") {
+@@ -1915,12 +2028,18 @@ function assertHeaderVersion(header, version) {
+ function normalizeReleasedV0Event(event, sessionId, state) {
+ 	const named = normalizeLegacyCompactionType(event);
+ 	assertSupportedLegacyType(named, sessionId);
+-	const message = normalizeLegacyMessage(normalizeLegacyCompaction(normalizeLegacyRetry(normalizeLegacySteering(normalizeLegacyRequestHeader(normalizeLegacyTurnEnd(normalizeLegacyTurnStart(named, sessionId), sessionId), sessionId), sessionId), sessionId, state.retryIds), sessionId, state), sessionId, state.messageIds);
++	const message = normalizeLegacySubagentDescriptorVersion(normalizeLegacyMessage(normalizeLegacyCompaction(normalizeLegacyRetry(normalizeLegacySteering(normalizeLegacyRequestHeader(normalizeLegacyTurnEnd(normalizeLegacyTurnStart(named, sessionId), sessionId), sessionId), sessionId), sessionId, state.retryIds), sessionId, state), sessionId, state.messageIds));
+ 	if (message.type !== "assistant/chunk") assertReleasedEventPayload(message, 0);
+ 	const messageId = eventMessageId(message);
+ 	if (messageId !== void 0) state.messageIds.set(message.seq, messageId);
+ 	return message;
+ }
++function normalizeLegacySubagentDescriptorVersion(event) {
++	if (event.type !== "subagent/descriptor") return event;
++	const data = releasedV0Record(event.data, `subagent/descriptor ${event.seq} data`);
++	if (data["version"] !== 2) return event;
++	return { ...event, data: { ...data, version: 3 } };
++}
+ function normalizeLegacyCompactionType(event) {
+ 	switch (event.type) {
+ 		case "compact/start": return {

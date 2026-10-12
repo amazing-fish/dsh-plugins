@@ -1,0 +1,64 @@
+diff --git a/dsh-mnemon-provider-hindsight/lib/index.js b/dsh-mnemon-provider-hindsight/lib/index.js
+index be9ebb9..e7fa73b 100644
+--- a/dsh-mnemon-provider-hindsight/lib/index.js
++++ b/dsh-mnemon-provider-hindsight/lib/index.js
+@@ -196,19 +196,48 @@ var HindsightProvider = class extends HttpMemoryProvider {
+ 	async remember(body, request, signal) {
+ 		const connection = this.connection(body);
+ 		const operationId = randomUUID();
++		// 2026-09-10 local patch (⑦): synchronous retain first — try async:false
++		// and only fall back to the queued extraction when the daemon cannot
++		// commit synchronously. Gives the provider an immediate "committed"
++		// receipt instead of fire-and-forget. Ported to 0.5.5 on 2026-10-12.
++		const items = [{
++			content: request.content,
++			context: request.category ?? "dsh-mnemon",
++			metadata: { source: "dsh-mnemon" },
++			...request.tags === void 0 ? {} : { tags: request.tags },
++			...request.entities === void 0 ? {} : { entities: request.entities.map((text) => ({ text })) }
++		}];
++		try {
++			const syncPayload = jsonObject(await this.request(body, `${this.bankPath(connection)}/memories`, {
++				headers: this.headers(connection),
++				json: { items, async: false, operation_id: operationId },
++				signal
++			})) ?? {};
++			if (syncPayload.success === true && syncPayload.async === false) {
++				return {
++					action: "committed",
++					status: "succeeded",
++					provider: this.id,
++					summary: "Hindsight retained the content synchronously.",
++					operationId,
++					stored: jsonNumber(syncPayload.items_count) ?? 1
++				};
++			}
++		} catch (error) {
++			// 2026-10-12 (Codex review, PR dsh-plugins#2): fall back to the
++			// queued path ONLY when the daemon definitively refused the
++			// synchronous retain with a 4xx HTTP response — the request was
++			// never committed, so re-submitting cannot duplicate it. Transport
++			// failures, timeouts, aborts, and 5xx have an ambiguous outcome
++			// (the sync request may already have committed server-side; the
++			// daemon ignores operation_id for synchronous retains, so an
++			// async replay would duplicate the write) — propagate instead.
++			const httpStatus = typeof error?.message === "string" ? error.message.match(/\bHTTP (\d{3})\b/u) : null;
++			if (httpStatus === null || Number(httpStatus[1]) >= 500) throw error;
++		}
+ 		const payload = jsonObject(await this.request(body, `${this.bankPath(connection)}/memories`, {
+ 			headers: this.headers(connection),
+-			json: {
+-				items: [{
+-					content: request.content,
+-					context: request.category ?? "dsh-mnemon",
+-					metadata: { source: "dsh-mnemon" },
+-					...request.tags === void 0 ? {} : { tags: request.tags },
+-					...request.entities === void 0 ? {} : { entities: request.entities.map((text) => ({ text })) }
+-				}],
+-				async: true,
+-				operation_id: operationId
+-			},
++			json: { items, async: true, operation_id: operationId },
+ 			signal
+ 		})) ?? {};
+ 		return {

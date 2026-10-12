@@ -1,0 +1,22 @@
+diff --git a/@vectorize-io/hindsight-coding-agents/dist/daemon-start.js b/@vectorize-io/hindsight-coding-agents/dist/daemon-start.js
+index 9ff2bee..a644df7 100644
+--- a/@vectorize-io/hindsight-coding-agents/dist/daemon-start.js
++++ b/@vectorize-io/hindsight-coding-agents/dist/daemon-start.js
+@@ -112,7 +112,7 @@ var init_dist = __esm({
+           embedPackagePath: this.embedPackagePath
+         });
+         const args = [...baseArgs, "daemon", "--profile", this.profile, "stop"];
+-        const child = spawn(cmd, args, { stdio: "pipe" });
++        const child = spawn(cmd, args, { stdio: "pipe", windowsHide: true });
+         this.pipeOutput(child, "daemon.stop");
+         await new Promise((resolve2) => {
+           const timeout = setTimeout(() => {
+@@ -231,7 +231,7 @@ var init_dist = __esm({
+        * once it exits with code 0. Rejects on non-zero exit or spawn error.
+        */
+       async runCommand(cmd, args, env, label) {
+-        const child = spawn(cmd, args, { stdio: "pipe", env });
++        const child = spawn(cmd, args, { stdio: "pipe", env, windowsHide: true });
+         let output = "";
+         child.stdout?.on("data", (data) => {
+           const text = data.toString();

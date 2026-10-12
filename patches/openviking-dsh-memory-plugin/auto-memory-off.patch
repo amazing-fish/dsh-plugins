@@ -1,0 +1,51 @@
+diff --git a/@openviking/dsh-memory-plugin/index.mjs b/@openviking/dsh-memory-plugin/index.mjs
+index de8c0ed..f477bec 100644
+--- a/@openviking/dsh-memory-plugin/index.mjs
++++ b/@openviking/dsh-memory-plugin/index.mjs
+@@ -20,6 +20,12 @@ export function apply(ctx, input = {}) {
+   const skipMemory = session => (
+     config.skipSubagentSessions && session?.header?.origin === "subagent"
+   );
++  // PATCH B8 (2026-09-27 port to 0.5.8; original 2026-09-10, see ~/.dsh/patches/PATCHES.md):
++  // AUTO_MEMORY=false — OpenViking exits automatic memory per user decision (mnemon+Hindsight
++  // is the sole auto-memory system). The four auto hooks below register only when this is true.
++  // Kept: openvikingMemory service, pending-queue drainer, MCP tools, skills mount,
++  // viking:// guard (incl. noticeVikingUri), and all manual APIs.
++  const AUTO_MEMORY = false;
+   ctx.provide("openvikingMemory", runtime);
+   ctx.effect(
+     () => () => runtime.disposeAll(),
+@@ -34,7 +40,7 @@ export function apply(ctx, input = {}) {
+     "openvikingMemory.stopDrainer()",
+   );
+ 
+-  ctx.on("agent/session-start", ({ agent }) => {
++  if (AUTO_MEMORY) ctx.on("agent/session-start", ({ agent }) => {
+     if (skipMemory(agent.session)) return false;
+     agent.ctx.effect(
+       () => () => runtime.dispose(agent.session),
+@@ -48,7 +54,7 @@ export function apply(ctx, input = {}) {
+   // Profile + recall are independent after `next()`; run them concurrently so
+   // the agent/pre-step waterfall (which currently gates user/message push in
+   // dsh-agent-loop) spends less wall time (#4515).
+-  ctx.on("agent/pre-step", async ({ agent, messages, signal }, next) => {
++  if (AUTO_MEMORY) ctx.on("agent/pre-step", async ({ agent, messages, signal }, next) => {
+     const decision = await next();
+     if (skipMemory(agent.session)) return decision;
+     if (decision.kind !== "enter" || signal.aborted) return decision;
+@@ -63,13 +69,13 @@ export function apply(ctx, input = {}) {
+       : decision;
+   }, { prepend: true });
+ 
+-  ctx.on("session/event", (session, event) => {
++  if (AUTO_MEMORY) ctx.on("session/event", (session, event) => {
+     if (skipMemory(session)) return;
+     runtime.capture(session, event);
+     runtime.maybeCommit(session, event);
+   });
+ 
+-  ctx.on("session/flush", async session => {
++  if (AUTO_MEMORY) ctx.on("session/flush", async session => {
+     if (skipMemory(session)) return;
+     await runtime.flush(session);
+   });

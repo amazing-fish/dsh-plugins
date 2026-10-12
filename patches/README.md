@@ -1,42 +1,62 @@
 # patches
 
-Environment patches for bundled dependencies of DeepSeek Harness that are too
-small to ship as plugins but too annoying to lose on every upgrade. None of
-these are npm packages — they are applied directly to the installed packages.
+Environment patches for bundled dependencies of DeepSeek Harness (and its
+memory stack) that are too small to ship as plugins but too annoying to lose
+on every upgrade / reinstall. None of these are npm packages — they are
+applied directly to installed files, anchored by text (never line numbers).
 
-## openai-error-503-body
+All `*.patch` files here are **reference diffs**: `a/` is the pristine
+published package, `b/` is the patched local file. Re-apply by anchor and run
+`node --check` (JS) or `python -m py_compile` (Python) afterwards.
 
-| | |
-| --- | --- |
-| Target | `@deepseek-ai/dsh` → bundled `openai/core/error.mjs` (ESM runtime path) + `error.js` (CJS, belt-and-braces) |
-| Symptom | Upstream 503 queue responses show as `503 status code (no body)`; the queue notice (e.g. `已为您锁定...`) is dropped |
-| Root cause | Upstream sends a non-standard body `{code, message}` without an `error` wrapper. The JS OpenAI SDK's `APIError.generate()` only reads `errorResponse['error']`, so the body message is discarded |
-| Fix | Fall back to `errorResponse['message']` when no `error` object exists |
-| Verified on | openai@6.26.0 / @deepseek-ai/dsh 0.1.1-rc.2 (2026-08-29) |
+## Index
 
-### Usage
+| Patch | Package / version anchor | Status |
+| --- | --- | --- |
+| [openai-503-body](./openai-503-body) | openai@6.40.0 (bundled in @deepseek-ai/dsh) | active |
+| [dsh-llm-pi-ai](./dsh-llm-pi-ai) — opencode-camo UA + reasoning-only retry | @deepseek-ai/dsh-llm-pi-ai@0.2.0-rc.2 | active |
+| [dsh-session-format-v0-to-v1](./dsh-session-format-v0-to-v1) — summary + descriptor-v2/cron compat | @deepseek-ai/dsh-session-format-v0-to-v1@0.2.0-rc.2 | active |
+| [dsh-mnemon](./dsh-mnemon) — recall timeout 120s, sync retain, bounded fan-out | dsh-mnemon-provider-hindsight@0.5.5, dsh-mnemon-source-memory-spaces@0.5.18 | active |
+| [hindsight-coding-agents](./hindsight-coding-agents) — daemon windowsHide | @vectorize-io/hindsight-coding-agents@0.7.0 | active |
+| [openviking-dsh-memory-plugin](./openviking-dsh-memory-plugin) — auto-memory off | @openviking/dsh-memory-plugin@0.5.8 | active |
+| [hindsight-api-engine](./hindsight-api-engine) — ONNX chunking/threads, length-sorted rerank | hindsight-api-slim==0.9.2 | active |
+| [flashrank-int8-map](./flashrank-int8-map) — bge-zh int8 model map | FlashRank==0.2.10 | active |
+| [dsh-sm-context-piano](./dsh-sm-context-piano.md) | managed as a fork of hjj345345/dsh-sm-context-piano | fork |
 
-```powershell
-./apply.ps1                                   # auto-detect dsh install
-./apply.ps1 -DshRoot "path\to\@deepseek-ai\dsh"  # explicit
-```
+### Upstreamed / retired (kept for the record)
 
-The script is idempotent (skips already-patched files), anchored by text
-rather than line numbers, and runs `node --check` after inserting.
-**Restart the DSH process afterwards** — ESM modules are cached per process.
+- **dsh-mnemon budget per workspace** — upstreamed natively in
+  `dsh-mnemon-source-runtime` ≥ 0.5.14 (branches mechanism: writes carry
+  `entry.branches`, projections filter MEMORY.md entries by git branch,
+  budget accounting over the filtered set). No patch needed anymore.
+- **vision-toolkit providerRetryPolicy** — fixed upstream
+  (`@anionex/dsh-vision-toolkit` ≥ 0.1.40).
+- **dsh-cron-scheduler** — retired with dsh 0.2.0 (depended on the removed
+  `snapshotEvents()` API; task persistence lived in session logs and died on
+  session rebases — three independently observed losses). Replaced by the
+  official `@deepseek-ai/dsh-schedule` tools + the experimental schedule
+  bundle. The retired six-fix patch is archived as
+  [dsh-cron-scheduler@0.1.0-retired.patch](./dsh-cron-scheduler@0.1.0-retired.patch).
 
-### Manual verification
+## Wipe conditions (why this exists)
 
-```powershell
-node -e "import('file:///<dsh>/node_modules/openai/core/error.mjs').then(m => { console.log(m.APIError.generate(503, {code: 503, message: 'queued, please wait'}, undefined, new Headers()).message) })"
-# expect: 503 queued, please wait
-```
+Any of the following restores pristine package files and silently wipes the
+patches — no error, no warning:
 
-### Notes
+- `@deepseek-ai/dsh` upgrade (global side)
+- `pnpm install` / plugin update in a profile (profile side; version bumps are
+  **not** required — relinking from the store alone restores pristine content)
+- Python env recreation (daemon side)
 
-- The patch is lost whenever `@deepseek-ai/dsh` is upgraded (its install
-  reinstalls `node_modules`). Re-run `apply.ps1` after each upgrade.
-- `openai-error-503-body.patch` is a reference diff anchored to
-  openai@6.26.0; prefer `apply.ps1` across versions.
-- If `apply.ps1` throws `anchor not found`, openai's `generate()` has changed
-  upstream — check whether the fix landed upstream before re-deriving it.
+Rule of thumb: after any install/upgrade, run a marker check against this
+index and re-apply what got wiped, then restart the affected process.
+
+## Conventions
+
+- Reference diffs are anchored to exact published versions (see each README's
+  "Verified on" line). On version drift, re-derive by anchor, not line numbers.
+- `node --check` / `py_compile` after every re-apply; restart the owning
+  process (ESM/daemon state is cached).
+- Sanitization: diffs must never carry private registry URLs, tokens, internal
+  hostnames, or local absolute paths. Gateway hosts in the opencode-camo patch
+  are placeholders on purpose.

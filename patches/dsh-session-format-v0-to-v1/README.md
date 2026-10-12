@@ -23,7 +23,14 @@ Note: the migrator's `lib/index.js` is byte-identical (SHA256) between
 | Symptom | Legacy sessions containing subagent logs or `cron/change` events fail migration |
 | Root cause | Old sessions embed subagent descriptors at v2 (current is v3), and `cron/change` events from the retired community scheduler plugin are unknown to the disposition map |
 | Fix | `normalizeLegacySubagentDescriptorVersion` upgrades v2 descriptors to v3; `cron/change` gets an explicit disposition so those events pass through instead of failing the whole session |
-| Markers | `normalizeLegacySubagentDescriptorVersion`, `"cron/change": disposition`, `cronChangeValue` |
+| Cron forms modeled (Codex review, 2026-10-12) | Operations: `create`, `suggest`, `accept` (id + record), `delete`, `reject`, `pause`, `resume`, `dispatch` (+`next_at`) — the full set emitted by the retired scheduler. Records/suggestions model both kinds: `kind: "prompt"` (required `prompt`) and `kind: "workflow"` (required `workflow`, optional `workflow_args` object); `name` is optional throughout, matching the scheduler's own emitters. Verified with a 13-case behavioral suite (new forms pass, legacy forms regression-pass, malformed variants rejected) |
+| Markers | `normalizeLegacySubagentDescriptorVersion`, `"cron/change": disposition`, `cronChangeValue`, `"accept"`, `"pause", "resume"`, `"prompt", "workflow"` |
+
+Note: the earlier revision only modeled five operations and the `prompt`
+kind — sessions from environments that had used the scheduler's
+approval flow (`accept`) or workflow-kind jobs would have failed on those
+events. The full-form coverage was added after review; the widening is
+strictly additive (every previously accepted event still passes).
 
 Wiped on every `@deepseek-ai/dsh` upgrade; re-apply from the reference diff by
 anchor, then `node --check`.

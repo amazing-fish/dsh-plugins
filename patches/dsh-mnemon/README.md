@@ -27,7 +27,8 @@ Reference diff: `provider-hindsight-sync-retain.patch` (against
 | --- | --- |
 | Why | Stock `remember()` always posts `async: true` (queued extraction) and returns `queued` — the provider never learns whether the content actually landed |
 | Fix | Try a synchronous retain first (`async: false`); when the daemon commits synchronously return `action: "committed"` with the stored count, and only fall back to the queued path when the daemon cannot commit synchronously |
-| Markers | `async: false`, `action: "committed"` |
+| Fallback safety (Codex review, 2026-10-12) | The queued fallback fires **only on a definitive 4xx refusal** (the request was never committed). Transport failures, timeouts, aborts, and 5xx propagate instead — their outcome is ambiguous (the sync request may already have committed server-side, and the daemon ignores `operation_id` for synchronous retains, so an async replay would duplicate the write) |
+| Markers | `async: false`, `action: "committed"`, `HTTP (\d{3})` guard |
 
 ## memory-spaces-bounded-fanout
 

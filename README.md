@@ -9,6 +9,14 @@ A community-oriented collection of plugins and UI extensions for [DeepSeek Harne
 | [Memo](./plugins/memo) | Persistent, draggable four-zone memo window with light/dark theme support | Available |
 | [Skill Fuzzy Match](./plugins/skill-fuzzy-match) | Make the `/` slash menu match skills by subsequence (e.g. `/web` finds `coding-web-search`), not only by name prefix | Available · [npm](https://github.com/users/amazing-fish/packages/npm/package/dsh-plugin-skill-fuzzy-match) |
 
+## Patches
+
+[`patches/`](./patches) holds reference diffs for environment patches applied
+directly to installed packages (DSH core, the Mnemon memory stack, the
+Hindsight daemon, FlashRank) — too small for plugins, too easy to lose on
+reinstall. See the [patches index](./patches/README.md) for the full list,
+version anchors, and wipe/re-apply rules.
+
 ## Installing a plugin (npm / GitHub Packages)
 
 Some plugins here are also published to GitHub Packages as installable npm packages. Configure the `@amazing-fish` scope, then install with your package manager:

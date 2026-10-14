@@ -76,7 +76,13 @@ workspace stores by hand before flipping the config:
    the injected snapshot is projected from it at session start, so no
    MEMORY.md projection needs to be pre-written.
 3. Full-copy `documents/`, `state/memory-providers.json`, and `data/` (native
-   store DB) into every workspace store.
+   store DB) into every workspace store. **Quiesce writers first**: this runs
+   before the scope flip, so the old global root can still be live — stop all
+   DSH/Mnemon processes, or copy the SQLite DB with a consistent online
+   backup (e.g. Python `sqlite3` `src.backup(dst)`) instead of a raw file
+   copy, so the DB and its WAL/journal are never captured mid-write. If the
+   source changes after the copy (a late maintenance pass), re-sync the delta
+   with the same backup while no workspace copy has diverged yet.
 4. Keep the old global root in place (it remains the home of the shared
    USER.md); take a full backup before touching anything.
 

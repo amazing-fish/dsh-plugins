@@ -28,3 +28,13 @@ are the sole automatic memory chain; OpenViking stays as a resource/skill
 library plus manual tooling. The MCP server connection (`openviking`) is
 independent of this plugin, so manual `mcp__openviking__*` tooling keeps
 working either way.
+
+**Resolved 2026-10-15 (option A — full retirement):** the plugin entry
+`openviking-memory-runtime` was disabled via the plugin manager (persisted as
+a `disabled: true` row in the profile's patch layer). Automatic capture /
+startup injection / duplicate writes stop; the MCP server connection and the
+on-disk data stay available for manual tooling. No port of this patch will be
+made — the whole plugin no longer loads. A disabled row must use the real
+patch id `openviking-memory-runtime`; a row named `openviking-memory` matches
+nothing and silently no-ops (that inert row caused a "retirement didn't
+happen" misdiagnosis).

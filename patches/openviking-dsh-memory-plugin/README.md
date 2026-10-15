@@ -13,3 +13,18 @@ Reference diff: `auto-memory-off.patch` (against
 The plugin is modularized since 0.3.2, so the gate works by prefixing the four
 auto-hook registrations. Wiped on plugin update; re-apply from the reference
 diff by anchor.
+
+**Obsolete on ≥ 0.5.25 (2026-10-15):** the plugin restructured — `index.mjs`
+became a thin entry (~5 KB) that wires `runtime.mjs` (the capture engine,
+invoked as `runtime.capture(session, event)` from `index.mjs`), plus
+`lifecycle.mjs` (`injectStartupProfile`), `capture.mjs`, `mcp.mjs`,
+`skills.mjs`, `uri-guard.mjs`. The `AUTO_MEMORY` constant no longer exists, so
+the old reference patch has no anchor. Re-gating on 0.5.25 requires a new port
+(gate `runtime.capture()` and `injectStartupProfile()`), or disabling the
+plugin row outright — note that disabling by the wrong entry id silently does
+nothing: the loader entry is `openviking-memory-runtime`, not
+`openviking-memory`. Direction of record on this machine: Mnemon + Hindsight
+are the sole automatic memory chain; OpenViking stays as a resource/skill
+library plus manual tooling. The MCP server connection (`openviking`) is
+independent of this plugin, so manual `mcp__openviking__*` tooling keeps
+working either way.

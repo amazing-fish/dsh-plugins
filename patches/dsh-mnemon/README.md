@@ -105,10 +105,30 @@ timeoutMs: 120000
 `120000` is the plugin's schema maximum (`max(12e4)` in `lib/index.js`) — it
 cannot go higher without patching the schema itself.
 
+Since `dsh-mnemon@0.5.29` the shipped schema natively accepts `120000`
+(`timeoutMs: z.number().step(1).min(100).max(12e4)`), so the value validates
+out of the box — the patch is now purely the config value.
+
+**2026-10-15 incident note:** with `timeoutMs` at 120000 the federated
+memory-spaces panel still went red ("connection unavailable"). The failure was
+the unbounded search fan-out (see `memory-spaces-bounded-fanout` below), not
+the timeout — a single-bank recall completes in ~40s well under the 120s
+budget. Do not "fix" panel timeouts by lowering this value; a smaller timeout
+only tightens the gate.
+
 ## provider-hindsight-sync-retain
 
 Reference diff: `provider-hindsight-sync-retain.patch` (against
-`dsh-mnemon-provider-hindsight@0.5.5`).
+`dsh-mnemon-provider-hindsight@0.5.6`; earlier revisions 0.5.4/0.5.5 are
+covered by the same reference diff modulo context drift).
+
+**0.5.6 port (2026-10-15):** the package slimmed down — `request` /
+`connection` / `headers` helpers moved to the shared
+`HttpMemoryProvider` base class in `dsh-mnemon-source-memory-spaces`
+(`lib/provider-sdk.js`), so the patch is now a clean whole-method
+replacement of `remember()` only. The base class still throws
+`` `${label} HTTP ${response.status}` `` on HTTP errors, so the 4xx-detection
+guard `\bHTTP (\d{3})\b` keeps working unchanged.
 
 | | |
 | --- | --- |
@@ -120,8 +140,17 @@ Reference diff: `provider-hindsight-sync-retain.patch` (against
 ## memory-spaces-bounded-fanout
 
 Reference diff: `memory-spaces-bounded-fanout.patch` (against
-`dsh-mnemon-source-memory-spaces@0.5.18`; `search()` gained an `options`
-parameter in 0.5.18 — older versions use the two-arg signature).
+`dsh-mnemon-source-memory-spaces@0.5.19`; also applies verbatim to 0.5.18 —
+`search()` gained an `options` parameter in 0.5.18, older versions use the
+two-arg signature).
+
+**Load-bearing, twice proven:** the 2026-10-14 package-update wave
+(source-memory-spaces 0.5.18 → 0.5.19) wiped the patch, and the next day the
+panel went red again with the exact 2026-09-28 signature — ~12 active spaces
+fanned out in parallel, the slowest banks blew past the 120s provider timeout
+and every affected source flipped to "unavailable". Replaying the patch
+(anchors unchanged on 0.5.19) restores the staggered behavior. Treat this
+patch as mandatory after every reinstall of the package.
 
 | | |
 | --- | --- |

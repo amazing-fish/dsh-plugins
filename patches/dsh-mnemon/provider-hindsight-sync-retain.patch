@@ -1,15 +1,16 @@
 diff --git a/dsh-mnemon-provider-hindsight/lib/index.js b/dsh-mnemon-provider-hindsight/lib/index.js
-index be9ebb9..e7fa73b 100644
+index 2003eb6..bfee469 100644
 --- a/dsh-mnemon-provider-hindsight/lib/index.js
 +++ b/dsh-mnemon-provider-hindsight/lib/index.js
-@@ -196,19 +196,48 @@ var HindsightProvider = class extends HttpMemoryProvider {
+@@ -208,19 +208,49 @@ var HindsightProvider = class extends HttpMemoryProvider {
  	async remember(body, request, signal) {
  		const connection = this.connection(body);
  		const operationId = randomUUID();
 +		// 2026-09-10 local patch (⑦): synchronous retain first — try async:false
 +		// and only fall back to the queued extraction when the daemon cannot
 +		// commit synchronously. Gives the provider an immediate "committed"
-+		// receipt instead of fire-and-forget. Ported to 0.5.5 on 2026-10-12.
++		// receipt instead of fire-and-forget. Ported to 0.5.5 on 2026-10-12,
++		// to 0.5.6 (provider-sdk base class, request helper moved) on 2026-10-15.
 +		const items = [{
 +			content: request.content,
 +			context: request.category ?? "dsh-mnemon",

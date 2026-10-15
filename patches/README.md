@@ -16,9 +16,8 @@ published package, `b/` is the patched local file. Re-apply by anchor and run
 | [openai-503-body](./openai-503-body) | openai@6.40.0 (bundled in @deepseek-ai/dsh) | active |
 | [dsh-llm-pi-ai](./dsh-llm-pi-ai) — opencode-camo UA + reasoning-only retry | @deepseek-ai/dsh-llm-pi-ai@0.2.0-rc.2 | active |
 | [dsh-session-format-v0-to-v1](./dsh-session-format-v0-to-v1) — summary + descriptor-v2/cron compat | @deepseek-ai/dsh-session-format-v0-to-v1@0.2.0-rc.2 | active |
-| [dsh-mnemon](./dsh-mnemon) — recall timeout 120s, sync retain, bounded fan-out, hot-memory limits 51200/8192, per-workspace storage scope (profile-layer config patch) | dsh-mnemon@0.5.28, dsh-mnemon-provider-hindsight@0.5.5, dsh-mnemon-source-memory-spaces@0.5.18 | active |
-| [hindsight-coding-agents](./hindsight-coding-agents) — daemon windowsHide | @vectorize-io/hindsight-coding-agents@0.7.0 | active |
-| [openviking-dsh-memory-plugin](./openviking-dsh-memory-plugin) — auto-memory off | @openviking/dsh-memory-plugin@0.5.8 | active |
+| [dsh-mnemon](./dsh-mnemon) — recall timeout 120s, sync retain, bounded fan-out, hot-memory limits 51200/8192, per-workspace storage scope (profile-layer config patch) | dsh-mnemon@0.5.29, dsh-mnemon-provider-hindsight@0.5.6, dsh-mnemon-source-memory-spaces@0.5.19 | active |
+| [openviking-dsh-memory-plugin](./openviking-dsh-memory-plugin) — auto-memory off | @openviking/dsh-memory-plugin@0.5.8 | obsolete on ≥0.5.25 (plugin restructured, no anchor; see package README) |
 | [hindsight-api-engine](./hindsight-api-engine) — ONNX chunking/threads, length-sorted rerank | hindsight-api-slim==0.9.2 | active |
 | [flashrank-int8-map](./flashrank-int8-map) — bge-zh int8 model map | FlashRank==0.2.10 | active |
 | [dsh-sm-context-piano](./dsh-sm-context-piano.md) | managed as a fork of hjj345345/dsh-sm-context-piano | fork |
@@ -31,6 +30,10 @@ published package, `b/` is the patched local file. Re-apply by anchor and run
   budget accounting over the filtered set). No patch needed anymore.
 - **vision-toolkit providerRetryPolicy** — fixed upstream
   (`@anionex/dsh-vision-toolkit` ≥ 0.1.40).
+- **hindsight-coding-agents daemon windowsHide** — ships natively in
+  `@vectorize-io/hindsight-coding-agents@0.8.1` (verified on a fresh install
+  with no local patch applied, 2026-10-15). Reference diff kept for older
+  installs.
 - **dsh-cron-scheduler** — retired with dsh 0.2.0 (depended on the removed
   `snapshotEvents()` API; task persistence lived in session logs and died on
   session rebases — three independently observed losses). Replaced by the

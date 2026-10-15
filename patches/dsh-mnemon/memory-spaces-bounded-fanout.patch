@@ -1,16 +1,16 @@
 diff --git a/dsh-mnemon-source-memory-spaces/lib/index.js b/dsh-mnemon-source-memory-spaces/lib/index.js
-index 7b126b2..4d7faf9 100644
+index 0694a55..ff3388a 100644
 --- a/dsh-mnemon-source-memory-spaces/lib/index.js
 +++ b/dsh-mnemon-source-memory-spaces/lib/index.js
-@@ -1826,6 +1826,23 @@ var MemorySpacesService = class {
+@@ -2097,7 +2097,23 @@ var MemorySpacesService = class {
  		};
  	}
  	/** exclude: memoryKey()s to leave out before the quality policy selects. */
-+	// 2026-09-28 local patch (⑪): bound search fan-out to concurrency 2 — parallel Hindsight
+-	async search(request, signal, options = {}) {
++		// 2026-09-28 local patch (⑪): bound search fan-out to concurrency 2 — parallel Hindsight
 +	// recalls self-congest the daemon's shared reranker (7-parallel: most spaces >120s and go
-+	// "unavailable"); measured sequential: every bank 12-40s). Each provider call keeps its own
++	// "unavailable"; measured sequential: every bank 12-40s). Each provider call keeps its own
 +	// full sourceTimeoutMs budget because it starts when its turn begins.
-+	// Ported to 0.5.18 on 2026-10-12 (search() gained an options parameter).
 +	async mapBounded(items, worker, concurrency = 2) {
 +		const results = new Array(items.length);
 +		let cursor = 0;
@@ -23,10 +23,11 @@ index 7b126b2..4d7faf9 100644
 +		await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run));
 +		return results;
 +	}
- 	async search(request, signal, options = {}) {
++async search(request, signal, options = {}) {
  		const query = required(request.query, "query", 2e3);
  		const limit = memoryInputInteger(request.limit, this.config.defaultRecallLimit, 1, 50);
-@@ -1852,7 +1869,7 @@ var MemorySpacesService = class {
+ 		const qualityContext = {
+@@ -2123,7 +2139,7 @@ var MemorySpacesService = class {
  			...intent === void 0 ? {} : { intent },
  			...request.inspect === true ? { inspect: true } : {}
  		};
@@ -35,7 +36,7 @@ index 7b126b2..4d7faf9 100644
  			if (!body.provider.capabilities.search) return {
  				body,
  				result: {
-@@ -1879,7 +1896,7 @@ var MemorySpacesService = class {
+@@ -2150,7 +2166,7 @@ var MemorySpacesService = class {
  					source: readSource(body, "search", "unavailable", 0, { hint })
  				};
  			}

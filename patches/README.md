@@ -17,6 +17,7 @@ published package, `b/` is the patched local file. Re-apply by anchor and run
 | [dsh-llm-pi-ai](./dsh-llm-pi-ai) — opencode-camo UA + reasoning-only retry | @deepseek-ai/dsh-llm-pi-ai@0.2.0-rc.2 | active |
 | [dsh-session-format-v0-to-v1](./dsh-session-format-v0-to-v1) — summary + descriptor-v2/cron compat | @deepseek-ai/dsh-session-format-v0-to-v1@0.2.0-rc.2 | active |
 | [dsh-mnemon](./dsh-mnemon) — recall timeout 120s, sync retain, bounded fan-out, hot-memory limits 51200/8192, per-workspace storage scope (profile-layer config patch) | dsh-mnemon@0.5.28, dsh-mnemon-provider-hindsight@0.5.5, dsh-mnemon-source-memory-spaces@0.5.18 | active |
+| [dsh-context](./dsh-context) — session-list bloat fix: contextHeaders stateVersion bump (stale-row eviction) + historical backfill mount removed | dsh-context@0.73.0 (anchor-based, no diff file) | active |
 | [hindsight-coding-agents](./hindsight-coding-agents) — daemon windowsHide | @vectorize-io/hindsight-coding-agents@0.7.0 | active |
 | [openviking-dsh-memory-plugin](./openviking-dsh-memory-plugin) — auto-memory off | @openviking/dsh-memory-plugin@0.5.8 | active |
 | [hindsight-api-engine](./hindsight-api-engine) — ONNX chunking/threads, length-sorted rerank | hindsight-api-slim==0.9.2 | active |

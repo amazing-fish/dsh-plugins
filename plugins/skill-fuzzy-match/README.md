@@ -1,5 +1,19 @@
 # Skill Fuzzy Match
 
+> **⚠️ RETIRED 2026-10-17 — obsolete as of DSH core 0.2.0.** The upstream
+> permanent fix this stopgap was waiting for
+> ([deepseek-ai/deepseek-harness#4490](https://github.com/deepseek-ai/deepseek-harness/discussions/4490))
+> has shipped: `dsh-client-ui-primitives` now exports `rankByName()`
+> (`alignmentScore` + `boundaryBonus` — the same ordered-subsequence algorithm,
+> boundary weighting, prefix-first ranking, case-insensitive), and
+> `dsh-client-ui-skill`'s `/` source calls it directly, so the slash menu
+> fuzzy-matches skills out of the box. **If you run DSH ≥ 0.2.0, uninstall this
+> plugin** — its monkey-patch becomes a redundant double-fuzzy layer (it wraps
+> the native `rankByName` call and re-filters with its own copy of the same
+> algorithm). Kept here for DSH 0.1.x users; the npm package will not receive
+> further updates. Verified against `dsh-client-ui-skill` and
+> `dsh-client-ui-primitives` in `@deepseek-ai/dsh@0.2.0-rc.2`.
+
 Make the DSH `/` slash menu match **skills** by ordered-subsequence fuzzy match instead of strict `startsWith` prefix match.
 
 > **npm package:** [`@amazing-fish/dsh-plugin-skill-fuzzy-match`](https://github.com/users/amazing-fish/packages/npm/package/dsh-plugin-skill-fuzzy-match) (GitHub Packages). The files in this directory mirror the published package (`client.js` + `host.js` + `package.json`). Prefer installing the package over copying the source.

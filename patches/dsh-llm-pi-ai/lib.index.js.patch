@@ -1,8 +1,11 @@
 diff --git a/@deepseek-ai/dsh-llm-pi-ai/lib/index.js b/@deepseek-ai/dsh-llm-pi-ai/lib/index.js
-index 0c74b3a..7a6e463 100644
+index 4b1e5ad..631e551 100644
 --- a/@deepseek-ai/dsh-llm-pi-ai/lib/index.js
 +++ b/@deepseek-ai/dsh-llm-pi-ai/lib/index.js
-@@ -1411,10 +1411,10 @@ function mapStopReason(message, contextWindow) {
+@@ -1476,16 +1476,16 @@ function mapStopReason(message, contextWindow) {
+ 			message: message.errorMessage ?? `pi-ai detected context overflow for model "${message.model}"`,
+ 			code: CONTEXT_WINDOW_EXCEEDED_CODE
+ 		}
  	};
  	switch (message.stopReason) {
  		case "stop":
@@ -15,7 +18,13 @@ index 0c74b3a..7a6e463 100644
  					code: EMPTY_RESPONSE_CODE
  				}
  			};
-@@ -1733,13 +1733,36 @@ function reasoningInfo(model, defaultLevel) {
+ 			return { kind: "stop" };
+ 		case "length": return { kind: "max-tokens" };
+ 		case "toolUse": return { kind: "tool-calls" };
+@@ -1810,19 +1810,42 @@ function reasoningInfo(model, defaultLevel) {
+ 			id: ReasoningEffortId(level),
+ 			name: `${level.charAt(0).toUpperCase()}${level.slice(1)}`
+ 		})),
  		...defaultLevel === void 0 ? {} : { defaultEffort: ReasoningEffortId(defaultLevel) }
  	} };
  }
@@ -54,7 +63,13 @@ index 0c74b3a..7a6e463 100644
  	};
  }
  /**
-@@ -1884,7 +1907,7 @@ var PiAiAdapter = class extends LlmAdapter {
+ * pi-ai-backed multi-provider adapter. Each operation reads the current
+ * profiles, so a configuration change reaches the next request without a
+ * restart; model descriptors come from the collection those profiles built.
+@@ -1983,13 +2006,13 @@ var PiAiAdapter = class extends LlmAdapter {
+ 				const iterator = toStreamChunks(snapshot.models.streamSimple(model, context, {
+ 					...profileOptions(profile, reasoning, apiKey),
+ 					...options.temperature === void 0 ? {} : { temperature: options.temperature },
  					...options.maxTokens === void 0 ? {} : { maxTokens: options.maxTokens },
  					...options.sessionId === void 0 ? {} : { sessionId: String(options.sessionId) },
  					signal: watchdog.signal,
@@ -63,4 +78,6 @@ index 0c74b3a..7a6e463 100644
  				}), model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]();
  				let exhausted = false;
  				try {
-
+ 					while (true) {
+ 						const result = await watchdog.next(iterator);
+ 						if (result.done) {

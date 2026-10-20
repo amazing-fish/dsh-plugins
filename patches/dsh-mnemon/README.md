@@ -24,7 +24,7 @@ profile machine-shared.
 Patch mechanics (important): a profile-layer row with the same `id`
 **replaces the shipped `config` wholesale — it is never deep-merged**, so the
 profile row must restate every shipped field. Full restated row (field set
-verified against `dsh-mnemon@0.5.28`; re-derive on other versions; takes
+verified against `dsh-mnemon@0.5.28`, re-verified on **0.5.33** (dsh 0.2.1-rc.2, 2026-10-20 — field set unchanged); re-derive on other versions; takes
 effect on the next dsh restart):
 
 ```yaml
@@ -140,7 +140,7 @@ guard `\bHTTP (\d{3})\b` keeps working unchanged.
 ## memory-spaces-bounded-fanout
 
 Reference diff: `memory-spaces-bounded-fanout.patch` (against
-`dsh-mnemon-source-memory-spaces@0.5.19`; also applies verbatim to 0.5.18 —
+`dsh-mnemon-source-memory-spaces@0.5.19` (re-verified on **0.5.22**, 2026-10-20 — anchors unchanged); also applies verbatim to 0.5.18 —
 `search()` gained an `options` parameter in 0.5.18, older versions use the
 two-arg signature).
 

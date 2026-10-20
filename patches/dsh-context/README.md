@@ -9,8 +9,9 @@ below, then `node --check`.
 
 ## session-list-bloat (contextHeaders projection eviction + backfill off)
 
-**Verified on:** dsh-context@0.70.0 (readable source) and dsh-context@0.73.0
-(minified; anchors below are the 0.73.0 forms). **Status:** active.
+**Verified on:** dsh-context@0.70.0 (readable source), dsh-context@0.73.0 and
+**dsh-context@0.73.3** (minified; the anchors below are unchanged in 0.73.3 —
+see *Version drift notes*). **Status:** active.
 
 ### Root cause
 
@@ -71,6 +72,12 @@ useful for current sessions while `session/list` stops bloating.
 | direct POST (server side) | ~3.4 s | ~2.5-3.0 s |
 | browser cold-open (incl. parse) | ~15 s | ~6.7 s |
 
+Re-measured on 0.73.3 / dsh 0.2.1-rc.2 after a restart (2026-10-20): direct
+`POST /api/session/list` = **5.09 MB / 1.37 s** (**−89 %** bytes vs the 46.6 MB
+pristine case). The route-level proof that the patch is live: the plugin's
+`POST /api/dsh-context/backfill` answers **404** (mount removed) while its
+sibling routes (`balance`, `fleet`, `skills`, `detail`) still answer 200.
+
 (The residual ~4.6 MB is core fixed cost: `turnOutline` ~1.4 MB + base fields
 over ~2474 items — not this plugin's.)
 
@@ -91,6 +98,19 @@ over ~2474 items — not this plugin's.)
   `watchActivityBackfill`/`stateVersion:1` in the registered definition →
   compressed `Hn`/same-key anchors); the anchors above are the 0.73.0 forms
   and were ported the same day a `pnpm remove` chain-upgrade installed 0.73.0.
-- Wiped-and-drifted = re-derive from the 0.73.0 anchors; if the plugin's
+- 0.73.0 → 0.73.3 (2026-10-20): **anchors unchanged**, no re-derivation
+  needed — `return{headers:i.length>50?i.slice(-50):i}},stateVersion:1}}` still
+  matches exactly once (the generic `J` helper keeps its own bare
+  `stateVersion:1`), and the apply tail still reads
+  `e.sessionProjections.register(Yt()),Hn(e,n),Cr(e,t)}` (the backfill
+  function is still `function Hn(e,t=I(),n=Pn)` and still owns
+  `/api/dsh-context/backfill`). Post-patch assertions that must all hold:
+  `stateVersion:1` → 1 remaining (the `J` helper), `Hn(e,n)` → 0 calls,
+  `function Hn(` → 1 (dead-code definition), local-patch markers → 2.
+- Wiped-and-drifted = re-derive from the 0.73.x anchors; if the plugin's
   structure changed again, re-derive from the 0.70.0 README description
   above (registered `contextHeaders` definition + backfill mount call).
+- Automation: an idempotent applier that skips when the marker is already
+  present, fails loudly when an anchor matches zero or several times, and runs
+  the assertions above is the reliable way to re-apply this patch across
+  versions (that is how 0.73.0 → 0.73.3 was ported in minutes).

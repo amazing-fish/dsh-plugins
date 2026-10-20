@@ -83,3 +83,15 @@ index and re-apply what got wiped, then restart the affected process.
 - Sanitization: diffs must never carry private registry URLs, tokens, internal
   hostnames, or local absolute paths. Gateway hosts in the opencode-camo patch
   are placeholders on purpose.
+- Porting a patch to a new package version: fetch the new pristine package and
+  replay the old `pristine → patched` edit chunks onto it by **exact unique
+  text match** (an opcode replayer, not hand-edited anchors). A chunk that
+  matches zero or several times must abort. Confirm the port by diffing the
+  result against the new pristine: the patch signature (`+N/-M`) should be
+  unchanged.
+- Before a core upgrade, resolve plugin compatibility **offline**: the core
+  ships `evaluatePluginCompatibility(manifest, exemptions, runtimeVersion)` in
+  its `dsh-app-boot` package, so every profile plugin can be checked against
+  the target version without installing it. Prerelease versions do satisfy
+  ordinary ranges; only peers pinned to an **exact** version (e.g.
+  `"@deepseek-ai/dsh-settings": "0.2.0-rc.2"`) need a matching bump.

@@ -1,11 +1,13 @@
 # dsh-session-format-v0-to-v1 patches
 
-Reference diff against `@deepseek-ai/dsh-session-format-v0-to-v1@0.2.0-rc.2`
+Reference diff against `@deepseek-ai/dsh-session-format-v0-to-v1@0.2.1-rc.2`
 (bundled inside `@deepseek-ai/dsh`). Both patches live in the same file, so
 `lib.index.js.patch` carries them together.
 
 Note: the migrator's `lib/index.js` is byte-identical (SHA256) between
-`dsh@0.1.7-rc.2` and `dsh@0.2.0-rc.2` — the diff applies to both.
+`dsh@0.1.7-rc.2`, `dsh@0.2.0-rc.2` **and `dsh@0.2.1-rc.2`**
+(`1B3BFF6AAF28CA62…`) — the diff applies to all three. Re-hash on every new
+core version; do not assume this carries forward.
 
 ## v0 session summary compatibility
 

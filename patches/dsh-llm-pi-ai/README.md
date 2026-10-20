@@ -1,8 +1,13 @@
 # dsh-llm-pi-ai patches
 
-Reference diffs against `@deepseek-ai/dsh-llm-pi-ai@0.2.0-rc.2` (bundled inside
-`@deepseek-ai/dsh`). Both patches live in the same file, so
-`lib.index.js.patch` carries them together.
+Reference diffs against `@deepseek-ai/dsh-llm-pi-ai@0.2.1-rc.2` (bundled inside
+`@deepseek-ai/dsh` 0.2.1-rc.2; identical hunks applied to 0.2.0-rc.2). Both
+patches live in the same file, so `lib.index.js.patch` carries them together.
+
+`0.2.0-rc.2 → 0.2.1-rc.2` upstream delta is +397/-68 lines and misses every
+patch point (`mapStopReason`, `requestHeaders`, the adapter's header call) —
+the hunks were replayed line-shifted and still produce the exact `+28/-5`
+signature, `node --check` clean.
 
 ## opencode-camo user-agent
 

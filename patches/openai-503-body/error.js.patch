@@ -1,8 +1,11 @@
 diff --git a/openai/core/error.js b/openai/core/error.js
-index 548c0c2..02d061d 100644
+index f169ce0..a23b3d3 100644
 --- a/openai/core/error.js
 +++ b/openai/core/error.js
-@@ -41,6 +41,9 @@ class APIError extends OpenAIError {
+@@ -38,12 +38,15 @@ class APIError extends OpenAIError {
+     }
+     static generate(status, errorResponse, message, headers) {
+         if (!status || !headers) {
              return new APIConnectionError({ message, cause: (0, errors_1.castToError)(errorResponse) });
          }
          const error = errorResponse?.['error'];
@@ -11,4 +14,7 @@ index 548c0c2..02d061d 100644
 +        }
          if (status === 400) {
              return new BadRequestError(status, error, message, headers);
+         }
+         if (status === 401) {
+             return new AuthenticationError(status, error, message, headers);
          }

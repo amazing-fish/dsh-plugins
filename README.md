@@ -7,7 +7,7 @@ A community-oriented collection of plugins and UI extensions for [DeepSeek Harne
 | Plugin | Description | Status |
 | --- | --- | --- |
 | [Memo](./plugins/memo) | Persistent, draggable four-zone memo window with light/dark theme support | Available |
-| [Skill Fuzzy Match](./plugins/skill-fuzzy-match) | Make the `/` slash menu match skills by subsequence (e.g. `/web` finds `coding-web-search`), not only by name prefix | Available · [npm](https://github.com/users/amazing-fish/packages/npm/package/dsh-plugin-skill-fuzzy-match) |
+| [Skill Fuzzy Match](./plugins/skill-fuzzy-match) | Make the `/` slash menu match skills by subsequence (e.g. `/web` finds `coding-web-search`), not only by name prefix | **Retired** — obsolete since DSH 0.2.0 (native `rankByName`); useful only on DSH 0.1.x · [npm](https://github.com/users/amazing-fish/packages/npm/package/dsh-plugin-skill-fuzzy-match) |
 
 ## Patches
 
@@ -28,7 +28,7 @@ Some plugins here are also published to GitHub Packages as installable npm packa
 ```
 
 ```bash
-pnpm add @amazing-fish/dsh-plugin-skill-fuzzy-match
+pnpm add @amazing-fish/dsh-plugin-skill-fuzzy-match   # example — this plugin is retired, see its README
 ```
 
 Then add a plugin row to your DSH profile's `cordis.patch.yml`:

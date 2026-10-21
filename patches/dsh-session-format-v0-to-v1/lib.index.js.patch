@@ -2,7 +2,10 @@ diff --git a/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js b/@deepseek-a
 index 5f8121a..d1f96cb 100644
 --- a/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js
 +++ b/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js
-@@ -72,6 +72,12 @@ const RELEASED_V0_EVENT_DISPOSITIONS = Object.freeze({
+@@ -69,12 +69,18 @@ const RELEASED_V0_EVENT_DISPOSITIONS = Object.freeze({
+ 		"sourceCommandId",
+ 		"maxTokens",
+ 		"usage",
  		"rawOutput",
  		"llmStreamCall"
  	]),
@@ -15,7 +18,13 @@ index 5f8121a..d1f96cb 100644
  	"feedback/record": disposition(["text"]),
  	"goal/change": disposition([
  		"kind",
-@@ -348,6 +354,9 @@ function assertReleasedPayloadSemantics(event, version) {
+ 		"version",
+ 		"operation"
+ 	], [
+@@ -345,12 +351,15 @@ function assertReleasedPayloadSemantics(event, version) {
+ 			nonEmptyString(data["model"], `${label} model`);
+ 			if (data["maxTokens"] !== void 0) countValue(data["maxTokens"], `${label} maxTokens`);
+ 			if (data["usage"] !== void 0) tokenUsageValue(data["usage"], `${label} usage`);
  			if (data["rawOutput"] !== void 0) contentBlocksValue(data["rawOutput"], `${label} rawOutput`, version);
  			if (data["llmStreamCall"] !== void 0) literalValue(data["llmStreamCall"], [true], `${label} llmStreamCall`);
  			return;
@@ -25,7 +34,13 @@ index 5f8121a..d1f96cb 100644
  		case "feedback/record":
  			nonEmptyString(data["text"], `${label} text`);
  			return;
-@@ -945,8 +954,7 @@ function pluginSourceValue(source, label) {
+ 		case "goal/change":
+ 			goalChangeValue(data, label);
+ 			return;
+@@ -942,14 +951,13 @@ function pluginSourceValue(source, label) {
+ 	if (form === "snapshot") arrayValue(source["sections"], `${label} sections`, (member, memberLabel) => {
+ 		const section = exactRecord(member, memberLabel, ["name", "text"]);
+ 		nonEmptyString(section["name"], `${memberLabel} name`);
  		stringValue(section["text"], `${memberLabel} text`);
  	});
  	else if (source["sections"] !== void 0) throw new SessionFormatError(`${label} sections require snapshot form`);
@@ -35,7 +50,13 @@ index 5f8121a..d1f96cb 100644
  }
  function sessionReferenceSourceValue(source, label, version) {
  	assertReleasedV0Keys(source, [
-@@ -1212,6 +1220,111 @@ function goalSnapshotValue(value, label) {
+ 		"kind",
+ 		"form",
+ 		"version",
+@@ -1209,12 +1217,117 @@ function goalSnapshotValue(value, label) {
+ 	if (goal["phase"] === "blocked") {
+ 		const reason = exactRecord(goal["blockedReason"], `${label} blockedReason`, ["code", "message"]);
+ 		nonEmptyString(reason["code"], `${label} blocked code`);
  		nonEmptyString(reason["message"], `${label} blocked message`);
  	} else if (goal["blockedReason"] !== void 0) throw new SessionFormatError(`${label} blockedReason requires blocked phase`);
  }
@@ -147,7 +168,13 @@ index 5f8121a..d1f96cb 100644
  function scheduleChangeValue(data, label) {
  	literalValue(data["version"], [1], `${label} version`);
  	if (data["operation"] === "create") {
-@@ -1915,12 +2028,18 @@ function assertHeaderVersion(header, version) {
+ 		assertReleasedV0Keys(data, [
+ 			"version",
+ 			"operation",
+@@ -1912,18 +2025,24 @@ var ReleasedV0ToV1Stage = class {
+ function assertHeaderVersion(header, version) {
+ 	if (header.version !== version) throw new SessionFormatError(`expected format v${version} header`);
+ }
  function normalizeReleasedV0Event(event, sessionId, state) {
  	const named = normalizeLegacyCompactionType(event);
  	assertSupportedLegacyType(named, sessionId);
@@ -167,3 +194,6 @@ index 5f8121a..d1f96cb 100644
  function normalizeLegacyCompactionType(event) {
  	switch (event.type) {
  		case "compact/start": return {
+ 			...event,
+ 			type: "compaction/start"
+ 		};

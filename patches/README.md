@@ -17,7 +17,7 @@ published package, `b/` is the patched local file. Re-apply by anchor and run
 | [dsh-llm-pi-ai](./dsh-llm-pi-ai) — opencode-camo UA + reasoning-only retry | @deepseek-ai/dsh-llm-pi-ai@0.2.1-rc.2 | active |
 | [dsh-session-format-v0-to-v1](./dsh-session-format-v0-to-v1) — summary + descriptor-v2/cron compat | @deepseek-ai/dsh-session-format-v0-to-v1@0.2.1-rc.2 (identical to 0.2.0-rc.2) | active |
 | [dsh-mnemon](./dsh-mnemon) — recall timeout 120s, sync retain, bounded fan-out, hot-memory limits 51200/8192, per-workspace storage scope (profile-layer config patch) | dsh-mnemon@0.5.33, dsh-mnemon-provider-hindsight@0.5.6, dsh-mnemon-source-memory-spaces@0.5.22 | active |
-| [dsh-context](./dsh-context) — session-list bloat fix: contextHeaders stateVersion bump (stale-row eviction) + historical backfill mount removed | dsh-context@0.73.3 (anchor-based, no diff file) | active |
+| [dsh-context](./dsh-context) — session-list bloat mitigation: contextHeaders stateVersion bump (stale-row eviction) + historical backfill mount removed | dsh-context@0.73.3 (anchor-based, no diff file) | **stopgap** (upstream pending; diverges from upstream's `stateVersion: 1` decision, regrows) |
 | [hindsight-api-engine](./hindsight-api-engine) — ONNX chunking/threads, length-sorted rerank | hindsight-api-slim==0.9.2 | active |
 | [flashrank-int8-map](./flashrank-int8-map) — bge-zh int8 model map | FlashRank==0.2.10 | active |
 | [dsh-sm-context-piano](./dsh-sm-context-piano.md) | managed as a fork of hjj345345/dsh-sm-context-piano | fork |
@@ -26,15 +26,13 @@ published package, `b/` is the patched local file. Re-apply by anchor and run
 
 - **hindsight-coding-agents daemon `windowsHide`** — upstreamed: 0.8.1+ ships
   `windowsHide: true` on all daemon spawns, so the patch is an in-place
-  verification on pristine 0.8.x rather than an edit. (0.7.0-era reference
-  diff kept in [hindsight-coding-agents](./hindsight-coding-agents).)
+  verification on pristine 0.8.x rather than an edit (verified on a fresh
+  install with no local patch applied, 2026-10-15). 0.7.0-era reference diff
+  kept in [hindsight-coding-agents](./hindsight-coding-agents).
 - **openviking-dsh-memory-plugin auto-memory off** — obsolete on ≥0.5.25: the
   plugin was restructured (`AUTO_MEMORY` gate removed, auto hooks moved to
   `runtime.capture` / `injectStartupProfile`), so the old anchor no longer
   exists; see the package README for the retirement record.
-
-### Upstreamed / retired (kept for the record)
-
 - **Experimental schedule bundle** — retired: since **dsh 0.2.1** schedule
   ships natively (`dsh-schedule` + `dsh-tool-schedule` + `dsh-client-ui-schedule`,
   mounted directly by the `@deepseek-ai/dsh-web-app` bundle as `id: schedule`
@@ -50,15 +48,13 @@ published package, `b/` is the patched local file. Re-apply by anchor and run
   budget accounting over the filtered set). No patch needed anymore.
 - **vision-toolkit providerRetryPolicy** — fixed upstream
   (`@anionex/dsh-vision-toolkit` ≥ 0.1.40).
-- **hindsight-coding-agents daemon windowsHide** — ships natively in
-  `@vectorize-io/hindsight-coding-agents@0.8.1` (verified on a fresh install
-  with no local patch applied, 2026-10-15). Reference diff kept for older
-  installs.
 - **dsh-cron-scheduler** — retired with dsh 0.2.0 (depended on the removed
   `snapshotEvents()` API; task persistence lived in session logs and died on
-  session rebases — three independently observed losses). Replaced by the
-  official `@deepseek-ai/dsh-schedule` tools + the experimental schedule
-  bundle. The retired six-fix patch is archived as
+  session rebases — three independently observed losses). The scheduling
+  service has been **native since dsh 0.2.0/0.2.1** (`dsh-schedule` +
+  `dsh-tool-schedule` + `dsh-client-ui-schedule`); no replacement bundle is
+  needed, and the old experimental schedule bundle entry is pruned by profile
+  sanitization. The retired six-fix patch is archived as
   [dsh-cron-scheduler@0.1.0-retired.patch](./dsh-cron-scheduler@0.1.0-retired.patch).
 
 ## Wipe conditions (why this exists)

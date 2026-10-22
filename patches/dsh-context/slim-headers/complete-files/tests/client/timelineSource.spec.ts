@@ -881,3 +881,43 @@ test('detailOf preserves full header epochs and rejects malformed header detail'
   assert.deepEqual(detailOf(detail(1, { headers }))?.headers, headers)
   assert.equal(detailOf(detail(1, { headers: {} })), null)
 })
+
+test('header-only changes refetch at the same timeline rev without dropping the last payload', async () => {
+  let calls = 0
+  const store = new DetailStore(async () => {
+    const seq = ++calls
+    return detail(seq >= 3 ? 11 : 10, { headers: { headers: [{ seq, time: 0, tools: [] }] } })
+  }, 0)
+  const off = store.subscribe(() => {})
+  store.request(10, 1)
+  await until(() => calls === 1 && !store.getSnapshot().pending, 'first header never landed')
+  const first = store.getSnapshot().detail
+  store.request(10, 2)
+  assert.equal(store.getSnapshot().detail, first, 'keep the last good payload during a header refresh')
+  await until(() => store.getSnapshot().detail?.headers?.headers[0].seq === 2, 'new header never landed')
+  store.request(11, 2)
+  await until(() => calls === 3, 'the next timeline change must not be suppressed')
+  off()
+})
+
+test('a header change invalidates an in-flight response and resumes a parked pending refresh', async () => {
+  let settleFirst: ((value: ContextTimelineDetail) => void) | undefined
+  let calls = 0
+  const store = new DetailStore(() => {
+    calls++
+    return calls === 1 ? new Promise(resolve => { settleFirst = resolve }) : Promise.resolve(detail(10))
+  }, 1)
+  const off = store.subscribe(() => {})
+  store.request(10, 1)
+  await until(() => calls === 1, 'the first read never started')
+  store.request(10, 2)
+  await new Promise(resolve => setTimeout(resolve, 5))
+  settleFirst?.(detail(10))
+  await until(() => calls === 2 && !store.getSnapshot().pending, 'the changed header was not fetched')
+  store.request(10, 3)
+  off()
+  const resume = store.subscribe(() => {})
+  store.request(10, 3)
+  await until(() => calls === 3, 'parked header refresh did not resume')
+  resume()
+})

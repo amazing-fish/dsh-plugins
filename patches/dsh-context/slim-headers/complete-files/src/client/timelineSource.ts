@@ -82,6 +82,7 @@ export class DetailStore {
   private targetRev = -1
   /** The head rev seen last; a DECREASE means the host refolded and revisions restarted. */
   private lastHeadRev = -1
+  private lastHeaderSeq = -1
   private generation = 0
   private failed = false
   private inFlight = false
@@ -119,11 +120,13 @@ export class DetailStore {
 
   /** The head's revision arrived: schedule the trailing-edge read when it
    * outruns the served detail. A DECREASE means the host refolded, so revisions restart and the ledger resets. */
-  request(rev: number): void {
+  request(rev: number, headerSeq = -1): void {
     if (rev < this.lastHeadRev) this.resetLedger()
+    else if (headerSeq !== this.lastHeaderSeq) this.resetLedger(true)
     this.lastHeadRev = rev
-    if (rev <= this.acceptedRev || rev <= this.wantedRev) return
-    this.wantedRev = rev
+    this.lastHeaderSeq = headerSeq
+    if (rev <= this.acceptedRev) return
+    this.wantedRev = Math.max(this.wantedRev, rev)
     this.schedule()
   }
 
@@ -137,14 +140,15 @@ export class DetailStore {
     if (!this.inFlight) void this.fire()
   }
 
-  private resetLedger(): void {
+  private resetLedger(keepDetail = false): void {
     this.generation++
     this.acceptedRev = -1
     this.wantedRev = -1
-    this.detail = null
-    this.failed = false
-    // Drop the snapshot's own payload reference too: it is the second place a released detail could stay reachable from.
-    this.snap = EMPTY_SNAP
+    if (!keepDetail) {
+      this.detail = null
+      this.failed = false
+      this.snap = EMPTY_SNAP
+    }
   }
 
   get active(): boolean {
@@ -292,6 +296,7 @@ const noopRetry = (): void => {}
  * unconditionally, and the branches below only shape the returned record. */
 export function useTimelineSource(props: SessionStandardProps): TimelineSource {
   const head = projectionOf(props, 'contextTimeline', timelineOf)
+  const headerSeq = projectionOf(props, 'contextHeaders', headersOf)?.headers.at(-1)?.seq ?? -1
   const sessionId = typeof props.sessionId === 'string' ? props.sessionId : ''
   // The split marker: the slim head carries the detail revision; `headRev` null
   // (an inline value, the gate fallback, a corrupt payload) means no channel.
@@ -310,8 +315,8 @@ export function useTimelineSource(props: SessionStandardProps): TimelineSource {
   )
   useEffect(() => {
     // The pushed head's revision drives the trailing refetch; the cold start requests rev 0.
-    if (store !== null) store.request(headRev ?? 0)
-  }, [store, headRev])
+    if (store !== null) store.request(headRev ?? 0, headerSeq)
+  }, [store, headRev, headerSeq])
 
   return useMemo<TimelineSource>(() => {
     const detail = snap.detail

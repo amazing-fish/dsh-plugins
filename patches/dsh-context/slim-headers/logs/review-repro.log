@@ -1,0 +1,35 @@
+
+ RUN  v5.0.5 /workspace/scratch/63e06eefa73e/dsh-context-git
+
+--x
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |host| tests/host/headers-slim.spec.ts > v28 checkpoint resume and a cold refold keep comparable detail revisions
+AssertionError: Expected values to be strictly equal:
+
+46 !== 1
+
+
+- Expected
++ Received
+
+- 1
++ 46
+
+ ❯ tests/host/headers-slim.spec.ts:56:10
+     54|   const resumed = def.apply(cached, next)
+     55|   const cold = driveTimeline([...events, next]).state
+     56|   assert.equal(cold.detailRev ?? 0, resumed.detailRev ?? 0)
+       |          ^
+     57| })
+     58|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 skipped (3)
+   Start at  21:22:13
+   Duration  686ms (import 53%, transform 40%, tests 5%, worker 2%)
+

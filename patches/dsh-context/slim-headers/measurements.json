@@ -12,26 +12,26 @@
       "samples": [
         {
           "bytes": 50410489,
-          "ms": 3456.538,
+          "ms": 4609.988,
           "header_bytes": 49851161
         },
         {
           "bytes": 50410489,
-          "ms": 14529.572,
+          "ms": 2522.288,
           "header_bytes": 49851161
         },
         {
           "bytes": 50410489,
-          "ms": 2725.074,
+          "ms": 2231.828,
           "header_bytes": 49851161
         },
         {
           "bytes": 50410489,
-          "ms": 3236.344,
+          "ms": 2189.046,
           "header_bytes": 49851161
         }
       ],
-      "warm_median_ms": 3236.344,
+      "warm_median_ms": 2231.828,
       "row_header_bytes": 146660,
       "row_list_bytes": 146879,
       "detail_epochs": 0,
@@ -45,26 +45,26 @@
       "samples": [
         {
           "bytes": 1405818,
-          "ms": 1726.853,
+          "ms": 1455.092,
           "header_bytes": 846490
         },
         {
           "bytes": 1405818,
-          "ms": 1262.005,
+          "ms": 1181.452,
           "header_bytes": 846490
         },
         {
           "bytes": 1405818,
-          "ms": 1300.741,
+          "ms": 2235.853,
           "header_bytes": 846490
         },
         {
           "bytes": 1405818,
-          "ms": 1381.322,
+          "ms": 2516.387,
           "header_bytes": 846490
         }
       ],
-      "warm_median_ms": 1300.741,
+      "warm_median_ms": 2235.853,
       "row_header_bytes": 337,
       "row_list_bytes": 556,
       "detail_epochs": 45,

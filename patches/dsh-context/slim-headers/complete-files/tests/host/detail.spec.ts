@@ -307,7 +307,7 @@ describe('the detail route', () => {
     watchDetailChannel(ctx, BOUNDS)
     const result = await call(captured, { sessionId: 's1' }) as { ok: true; value: { rev: number; requests: unknown[]; nodes: unknown[]; head: { current: { total: number } } } }
     assert.equal(result.ok, true)
-    assert.equal(result.value.rev, 3, 'header, user and assistant each mutate detail')
+    assert.equal(result.value.rev, 2, 'user and assistant each mutate timeline detail')
     assert.equal(result.value.requests.length, 1)
     assert.equal(result.value.nodes.length, 2)
     assert.ok(result.value.head.current.total > 0, 'the slim head rides the live read too')

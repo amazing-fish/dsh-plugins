@@ -220,3 +220,27 @@ test('ContextView replaces count-only envelopes with all 45 fetched header epoch
   assert.ok(text(m.container).includes('epoch_tool_44'), 'the latest epoch tool is rendered from detail')
   await m.unmount()
 })
+
+test('an open ContextView refreshes tools when only the header epoch changes', async () => {
+  let seq = 1
+  const head = timeline({ detailRev: 6 })
+  vi.stubGlobal('fetch', async () => ({ ok: true, json: async () => ({ ok: true, value: {
+    rev: 6, requests: [], events: [], nodes: [], droppedNodes: 0, archive: [],
+    headers: { headers: [{ seq, time: T0, tools: [{ name: `updated_tool_${seq}`, tokens: 12 }] }] },
+  } }) }))
+  const useProjection = (key: string) => key === 'contextTimeline' ? head
+    : key === 'contextHeaders' ? { headers: [{ seq, time: T0, tools: [], toolCount: 1, totalToolTokens: 12 }], detail: true }
+      : undefined
+  const View = makeView(new TestClientCtx())
+  const props = { sessionId: 'header-only-view', useProjection }
+  const m = await mount(h(View, props))
+  await until(() => !text(m.container).includes(DICT_EN['detail.loading']), 'first detail did not land')
+  const tools = queryAll(m.container, '.lc-br-cat-row').find(el => text(el).includes('Tool Schemas'))
+  assert.ok(tools !== undefined)
+  await click(tools)
+  assert.ok(text(m.container).includes('updated_tool_1'))
+  seq = 2
+  await m.update(h(View, props))
+  await until(() => text(m.container).includes('updated_tool_2'), 'header-only change did not refresh the open browser')
+  await m.unmount()
+})

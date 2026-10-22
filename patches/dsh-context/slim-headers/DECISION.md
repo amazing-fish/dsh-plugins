@@ -13,7 +13,7 @@ A alone still multiplies a full tool table by every listed session; it is only a
 - contextHeaders stateVersion remains 1; state schema and stored records are unchanged. Old content-bearing v1 rows normalize through view(). No cache deletion or migration is required.
 - The detail channel gates both timeline and header splits. If it cannot mount, the existing inline generation still works; that compatibility fallback does not receive the payload-size guarantee.
 - headersOf accepts a tools-less epoch only with valid nonnegative integer counts, then normalizes to tools:[] so existing name/sort consumers stay safe. Aggregate token/count figures remain available while detail loads.
-- Header epochs now advance the existing detail revision, including tools-only changes. Otherwise an already-open page could retain an obsolete tool table. This change is future-event-backfillable and requires no stateVersion bump.
+- Keep the persisted timeline revision counter unchanged. The client separately watches the latest header epoch seq and invalidates the detail-read ledger while preserving the last good payload. This refreshes tools-only changes without making a v28 checkpoint counter incomparable to a cold refold.
 - Backfill stays mounted with its existing pacing, cold-read gate, live-session skip and activity/timeline warm-up.
 
 ## Isolation discovery

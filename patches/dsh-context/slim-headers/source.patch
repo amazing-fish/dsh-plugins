@@ -1,12 +1,12 @@
 diff --git a/docs/compatibility.md b/docs/compatibility.md
-index 6ffab0e..45446d1 100644
+index 6ffab0e..2b966d7 100644
 --- a/docs/compatibility.md
 +++ b/docs/compatibility.md
 @@ -85,6 +85,8 @@ Last verified: **2026-10-14** (dsh-context `0.70.0`, dsh `0.2.0-rc.2` npm instal
  *How fold-state changes reach existing installations.*
  
  1. **Bump a unit's `stateVersion` iff later events cannot backfill the change** — running totals, per-step collections flushed at `step/end`, materialized envelopes. Serve-time-derivable fields need no bump, and new wire fields are additive-optional: a pre-field row serves without them and the client degrades per §5's boundary rules. Current versions sit at each unit's `stateVersion` site; past bumps live in git history.
-+- **Header wire split:** while the detail route is live, list projections carry only the newest three envelopes and the retained epoch count; per-epoch tools ride detail. Keep header stateVersion 1: this is a serve-time change. A new header epoch advances the detail revision even without a model change. Channel-less hosts retain the inline fallback. (`src/host/headers.ts`, `src/host/detail.ts`, `tests/host/headers-slim.spec.ts`)
++- **Header wire split:** while the detail route is live, list projections carry only the newest three envelopes and the retained epoch count; per-epoch tools ride detail. Keep header stateVersion 1: this is a serve-time change. The client also watches the header epoch seq; persisted timeline revision semantics stay unchanged. Channel-less hosts retain the inline fallback. (`src/host/headers.ts`, `src/host/detail.ts`, `tests/host/headers-slim.spec.ts`)
 +
  2. **Stale rows refold from the durable log**; the warm-up probes BOTH `contextActivity` and `contextTimeline` and cold-refolds missing or stale rows on first page open, so idle sessions rebuild exactly. (`src/host/backfill.ts`)
  3. **Every cold read passes the host-wide gate** (issue #121) — FIFO, one at a time, only while the V8 heap sits below two-thirds of its ceiling; a skipped read takes the caller's designed no-data path, never a failure. (`src/host/coldRead.ts`)
@@ -134,7 +134,7 @@ index 46bacd9..168ce96 100644
  }
  
 diff --git a/src/client/timelineSource.ts b/src/client/timelineSource.ts
-index 23e9518..5590c74 100644
+index 23e9518..e6ccb11 100644
 --- a/src/client/timelineSource.ts
 +++ b/src/client/timelineSource.ts
 @@ -15,10 +15,10 @@
@@ -163,7 +163,53 @@ index 23e9518..5590c74 100644
      ...collectionsOf(data),
    }
  }
-@@ -275,6 +278,7 @@ export function resetTimelineDetailStores(): void {
+@@ -79,6 +82,7 @@ export class DetailStore {
+   private targetRev = -1
+   /** The head rev seen last; a DECREASE means the host refolded and revisions restarted. */
+   private lastHeadRev = -1
++  private lastHeaderSeq = -1
+   private generation = 0
+   private failed = false
+   private inFlight = false
+@@ -116,11 +120,13 @@ export class DetailStore {
+ 
+   /** The head's revision arrived: schedule the trailing-edge read when it
+    * outruns the served detail. A DECREASE means the host refolded, so revisions restart and the ledger resets. */
+-  request(rev: number): void {
++  request(rev: number, headerSeq = -1): void {
+     if (rev < this.lastHeadRev) this.resetLedger()
++    else if (headerSeq !== this.lastHeaderSeq) this.resetLedger(true)
+     this.lastHeadRev = rev
+-    if (rev <= this.acceptedRev || rev <= this.wantedRev) return
+-    this.wantedRev = rev
++    this.lastHeaderSeq = headerSeq
++    if (rev <= this.acceptedRev) return
++    this.wantedRev = Math.max(this.wantedRev, rev)
+     this.schedule()
+   }
+ 
+@@ -134,14 +140,15 @@ export class DetailStore {
+     if (!this.inFlight) void this.fire()
+   }
+ 
+-  private resetLedger(): void {
++  private resetLedger(keepDetail = false): void {
+     this.generation++
+     this.acceptedRev = -1
+     this.wantedRev = -1
+-    this.detail = null
+-    this.failed = false
+-    // Drop the snapshot's own payload reference too: it is the second place a released detail could stay reachable from.
+-    this.snap = EMPTY_SNAP
++    if (!keepDetail) {
++      this.detail = null
++      this.failed = false
++      this.snap = EMPTY_SNAP
++    }
+   }
+ 
+   get active(): boolean {
+@@ -275,6 +282,7 @@ export function resetTimelineDetailStores(): void {
  export type DetailState = 'legacy' | 'loading' | 'ready' | 'failed'
  
  export interface TimelineSource {
@@ -171,7 +217,26 @@ index 23e9518..5590c74 100644
    /** The value the cards render: the inline generation's value, or the slim head merged with the fetched detail collections. */
    data: ContextTimeline | null
    detailState: DetailState
-@@ -340,6 +344,6 @@ export function useTimelineSource(props: SessionStandardProps): TimelineSource {
+@@ -288,6 +296,7 @@ const noopRetry = (): void => {}
+  * unconditionally, and the branches below only shape the returned record. */
+ export function useTimelineSource(props: SessionStandardProps): TimelineSource {
+   const head = projectionOf(props, 'contextTimeline', timelineOf)
++  const headerSeq = projectionOf(props, 'contextHeaders', headersOf)?.headers.at(-1)?.seq ?? -1
+   const sessionId = typeof props.sessionId === 'string' ? props.sessionId : ''
+   // The split marker: the slim head carries the detail revision; `headRev` null
+   // (an inline value, the gate fallback, a corrupt payload) means no channel.
+@@ -306,8 +315,8 @@ export function useTimelineSource(props: SessionStandardProps): TimelineSource {
+   )
+   useEffect(() => {
+     // The pushed head's revision drives the trailing refetch; the cold start requests rev 0.
+-    if (store !== null) store.request(headRev ?? 0)
+-  }, [store, headRev])
++    if (store !== null) store.request(headRev ?? 0, headerSeq)
++  }, [store, headRev, headerSeq])
+ 
+   return useMemo<TimelineSource>(() => {
+     const detail = snap.detail
+@@ -340,6 +349,6 @@ export function useTimelineSource(props: SessionStandardProps): TimelineSource {
        ...(detail.fileOpsFloor !== undefined ? { fileOpsFloor: detail.fileOpsFloor } : {}),
        ...(detail.spans !== undefined ? { spans: detail.spans } : {}),
      }
@@ -250,29 +315,6 @@ index b228043..5b340b6 100644
              if (revision !== undefined) {
                payloads.delete(sessionId)
                payloads.set(sessionId, { persistence, revision, value: detail })
-diff --git a/src/host/fold.ts b/src/host/fold.ts
-index e2d6aa2..a4c47f0 100644
---- a/src/host/fold.ts
-+++ b/src/host/fold.ts
-@@ -42,7 +42,7 @@ function categoryOf(type: string, message: { source?: MessageSource } | undefine
- }
- 
- /** Mark the detail collections dirty. Fold branches that touch only the working slots (stepStart, callNames, the
-- * shadow claim) or the envelope scalars must NOT bump — the served detail is unchanged and an open tab has nothing to refetch.
-+ * shadow claim) or capacity scalars must NOT bump — the served detail is unchanged and an open tab has nothing to refetch.
-  */
- function bumpDetailRev(st: TimelineState): void {
-   st.detailRev = (st.detailRev ?? 0) + 1
-@@ -326,8 +326,8 @@ export function applyTimeline(state: TimelineState, event: TimelineEvent, bounds
-         // reason 'change' ('initial' opens a session, 'resume' reopens it).
-         if ((data?.reason === 'change' || data?.reason === 'resume') && s.model && s.lastModel && s.model !== s.lastModel) {
-           s.events.push({ seq: event.seq, time: event.time, kind: 'model', from: s.lastModel, to: s.model })
--          bumpDetailRev(s)
-         }
-+        bumpDetailRev(s)
-         if (s.model) s.lastModel = s.model
-         break
-       }
 diff --git a/src/host/headers.ts b/src/host/headers.ts
 index d265566..8350f1c 100644
 --- a/src/host/headers.ts
@@ -422,10 +464,10 @@ index ecc824e..f1da60d 100644
    })
  
 diff --git a/tests/client/components/contextView.splitDetail.spec.ts b/tests/client/components/contextView.splitDetail.spec.ts
-index 2b8ed23..34d130c 100644
+index 2b8ed23..91d9fbe 100644
 --- a/tests/client/components/contextView.splitDetail.spec.ts
 +++ b/tests/client/components/contextView.splitDetail.spec.ts
-@@ -200,3 +200,23 @@ describe('ContextView — the op-log generation (fileOps on the detail payload)'
+@@ -200,3 +200,47 @@ describe('ContextView — the op-log generation (fileOps on the detail payload)'
      await m.unmount()
    })
  })
@@ -447,6 +489,30 @@ index 2b8ed23..34d130c 100644
 +  assert.ok(tools !== undefined)
 +  await click(tools)
 +  assert.ok(text(m.container).includes('epoch_tool_44'), 'the latest epoch tool is rendered from detail')
++  await m.unmount()
++})
++
++test('an open ContextView refreshes tools when only the header epoch changes', async () => {
++  let seq = 1
++  const head = timeline({ detailRev: 6 })
++  vi.stubGlobal('fetch', async () => ({ ok: true, json: async () => ({ ok: true, value: {
++    rev: 6, requests: [], events: [], nodes: [], droppedNodes: 0, archive: [],
++    headers: { headers: [{ seq, time: T0, tools: [{ name: `updated_tool_${seq}`, tokens: 12 }] }] },
++  } }) }))
++  const useProjection = (key: string) => key === 'contextTimeline' ? head
++    : key === 'contextHeaders' ? { headers: [{ seq, time: T0, tools: [], toolCount: 1, totalToolTokens: 12 }], detail: true }
++      : undefined
++  const View = makeView(new TestClientCtx())
++  const props = { sessionId: 'header-only-view', useProjection }
++  const m = await mount(h(View, props))
++  await until(() => !text(m.container).includes(DICT_EN['detail.loading']), 'first detail did not land')
++  const tools = queryAll(m.container, '.lc-br-cat-row').find(el => text(el).includes('Tool Schemas'))
++  assert.ok(tools !== undefined)
++  await click(tools)
++  assert.ok(text(m.container).includes('updated_tool_1'))
++  seq = 2
++  await m.update(h(View, props))
++  await until(() => text(m.container).includes('updated_tool_2'), 'header-only change did not refresh the open browser')
 +  await m.unmount()
 +})
 diff --git a/tests/client/dna.spec.ts b/tests/client/dna.spec.ts
@@ -489,10 +555,10 @@ index 915645c..47f8f92 100644
 +  }
 +})
 diff --git a/tests/client/timelineSource.spec.ts b/tests/client/timelineSource.spec.ts
-index b7aedfa..c2850bc 100644
+index b7aedfa..e5630dc 100644
 --- a/tests/client/timelineSource.spec.ts
 +++ b/tests/client/timelineSource.spec.ts
-@@ -875,3 +875,9 @@ describe('useTimelineSource', () => {
+@@ -875,3 +875,49 @@ describe('useTimelineSource', () => {
      await m.unmount()
    })
  })
@@ -501,6 +567,46 @@ index b7aedfa..c2850bc 100644
 +  const headers = { headers: [{ seq: 1, time: 2, tools: [{ name: 'deep_tool', tokens: 20 }] }] }
 +  assert.deepEqual(detailOf(detail(1, { headers }))?.headers, headers)
 +  assert.equal(detailOf(detail(1, { headers: {} })), null)
++})
++
++test('header-only changes refetch at the same timeline rev without dropping the last payload', async () => {
++  let calls = 0
++  const store = new DetailStore(async () => {
++    const seq = ++calls
++    return detail(seq >= 3 ? 11 : 10, { headers: { headers: [{ seq, time: 0, tools: [] }] } })
++  }, 0)
++  const off = store.subscribe(() => {})
++  store.request(10, 1)
++  await until(() => calls === 1 && !store.getSnapshot().pending, 'first header never landed')
++  const first = store.getSnapshot().detail
++  store.request(10, 2)
++  assert.equal(store.getSnapshot().detail, first, 'keep the last good payload during a header refresh')
++  await until(() => store.getSnapshot().detail?.headers?.headers[0].seq === 2, 'new header never landed')
++  store.request(11, 2)
++  await until(() => calls === 3, 'the next timeline change must not be suppressed')
++  off()
++})
++
++test('a header change invalidates an in-flight response and resumes a parked pending refresh', async () => {
++  let settleFirst: ((value: ContextTimelineDetail) => void) | undefined
++  let calls = 0
++  const store = new DetailStore(() => {
++    calls++
++    return calls === 1 ? new Promise(resolve => { settleFirst = resolve }) : Promise.resolve(detail(10))
++  }, 1)
++  const off = store.subscribe(() => {})
++  store.request(10, 1)
++  await until(() => calls === 1, 'the first read never started')
++  store.request(10, 2)
++  await new Promise(resolve => setTimeout(resolve, 5))
++  settleFirst?.(detail(10))
++  await until(() => calls === 2 && !store.getSnapshot().pending, 'the changed header was not fetched')
++  store.request(10, 3)
++  off()
++  const resume = store.subscribe(() => {})
++  store.request(10, 3)
++  await until(() => calls === 3, 'parked header refresh did not resume')
++  resume()
 +})
 diff --git a/tests/client/treemap.spec.ts b/tests/client/treemap.spec.ts
 index 9a7fc7c..832d9e6 100644
@@ -521,7 +627,7 @@ index 9a7fc7c..832d9e6 100644
 +  }
 +})
 diff --git a/tests/host/detail.spec.ts b/tests/host/detail.spec.ts
-index c2f8413..8566e27 100644
+index c2f8413..75436f5 100644
 --- a/tests/host/detail.spec.ts
 +++ b/tests/host/detail.spec.ts
 @@ -4,6 +4,8 @@
@@ -547,7 +653,7 @@ index c2f8413..8566e27 100644
      const result = await call(captured, { sessionId: 's1' }) as { ok: true; value: { rev: number; requests: unknown[]; nodes: unknown[]; head: { current: { total: number } } } }
      assert.equal(result.ok, true)
 -    assert.equal(result.value.rev, 2, 'two detail-mutating folds')
-+    assert.equal(result.value.rev, 3, 'header, user and assistant each mutate detail')
++    assert.equal(result.value.rev, 2, 'user and assistant each mutate timeline detail')
      assert.equal(result.value.requests.length, 1)
      assert.equal(result.value.nodes.length, 2)
      assert.ok(result.value.head.current.total > 0, 'the slim head rides the live read too')
@@ -600,73 +706,12 @@ index c2f8413..8566e27 100644
 +    })
 +  }
 +})
-diff --git a/tests/host/fold-split.spec.ts b/tests/host/fold-split.spec.ts
-index 7b4e904..56c69b5 100644
---- a/tests/host/fold-split.spec.ts
-+++ b/tests/host/fold-split.spec.ts
-@@ -47,15 +47,15 @@ function canonicalLog(): TimelineEvent[] {
- describe('the detailRev ledger', () => {
-   test('bumps exactly on the detail-mutating folds of the canonical log', () => {
-     // Mutations: userMessage(5), assistantMessage(6), toolResult(8),
--    // stepEnd(9, the strip's span flush), assistantMessage(10), compaction(11), planMode(12) — seven in total.
-+    // stepEnd(9, the strip's span flush), assistantMessage(10), compaction(11), planMode(12) and header(1) — eight in total.
-     const { state } = driveTimeline(canonicalLog())
--    assert.equal(state.detailRev, 7)
-+    assert.equal(state.detailRev, 8)
-   })
- 
--  test('the working-slot and envelope folds do NOT bump (nothing to refetch)', () => {
-+  test('working slots do not bump; a new header epoch does', () => {
-     const { def, state } = driveTimeline(canonicalLog())
-     // step/start (arms the step slot), tool/call (arms the call ledger),
--    // request/context (capacity metadata), and a header with an UNCHANGED model all leave the detail collections as-is.
-+    // request/context (capacity metadata), leave the detail collections as-is; a new header still needs its tool table refetched.
-     const follow: TimelineEvent[] = [
-       requestContext(13, { contextWindow: 256000 }),
-       header(14, { model: 'deepseek-v4-flash', provider: 'deepseek', reason: 'change' }),
-@@ -64,15 +64,15 @@ describe('the detailRev ledger', () => {
-     ]
-     let st = state
-     for (const ev of follow) st = def.apply(st, ev)
--    assert.equal(st.detailRev, 7, 'no detail mutation, no bump')
--    // The capacity metadata and the header DID fold (state changed) — only the rev stayed.
-+    assert.equal(st.detailRev, 9, 'the new header epoch refreshes its tool detail')
-+    // The capacity metadata and the header DID fold (state changed) — the header advances the revision too.
-     assert.notEqual(st, state)
-   })
- 
-   test('a real model switch bumps (the events collection gains a row)', () => {
-     const { def, state } = driveTimeline(canonicalLog())
-     const switched = def.apply(state, header(13, { model: 'deepseek-v4-pro', provider: 'deepseek', reason: 'change' }))
--    assert.equal(switched.detailRev, 8)
-+    assert.equal(switched.detailRev, 9)
-   })
- 
-   test('the rev is plain JSON and survives the state gate', () => {
-@@ -101,7 +101,7 @@ describe('buildTimelineHead', () => {
-     // The headline anchor is the newest retained request's billing summary.
-     const lastReq = state.requests.at(-1)!
-     assert.deepEqual(head.last, { seq: lastReq.seq, total: lastReq.total, prompt: 20 })
--    assert.equal(head.detailRev, 7)
-+    assert.equal(head.detailRev, 8)
-     // The collections stay empty on the head — the detail channel serves them.
-     assert.deepEqual(head.requests, [])
-     assert.deepEqual(head.events, [])
-@@ -173,7 +173,7 @@ describe('buildTimelineDetail', () => {
-   test('serves the same collections the inline view serves, plus the revision and the head', () => {
-     const { state, view } = driveTimeline(canonicalLog())
-     const detail = buildTimelineDetail(state, resolveBounds({}))
--    assert.equal(detail.rev, 7)
-+    assert.equal(detail.rev, 8)
-     assert.deepEqual(detail.requests, view.requests)
-     assert.deepEqual(detail.events, view.events)
-     assert.deepEqual(detail.nodes, view.nodes)
 diff --git a/tests/host/headers-slim.spec.ts b/tests/host/headers-slim.spec.ts
 new file mode 100644
-index 0000000..264d08a
+index 0000000..36993f4
 --- /dev/null
 +++ b/tests/host/headers-slim.spec.ts
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,57 @@
 +import assert from 'node:assert/strict'
 +import { test } from 'vitest'
 +import { createContextHeadersDefinition } from '../../src/host/headers'
@@ -703,7 +748,7 @@ index 0000000..264d08a
 +  assert.equal(inline.detail, undefined)
 +})
 +
-+test('empty split state and newly appended epochs keep the v1 state and advance detail revisions', () => {
++test('empty split state and newly appended epochs keep the v1 state and original revision semantics', () => {
 +  const def = createContextHeadersDefinition(undefined, () => true)
 +  assert.deepEqual(def.wire.view(def.init()), { epochCount: 0, detail: true, headers: [] })
 +  const event = header(1, { tools: [{ name: 'tool', description: 'first' }] })
@@ -711,5 +756,16 @@ index 0000000..264d08a
 +  assert.equal(def.wire.view(state).headers[0].toolCount, 1)
 +  const events = [event, header(2, { tools: [{ name: 'other', description: 'second' }] })]
 +  const folded = driveTimeline(events)
-+  assert.equal(folded.state.detailRev, 2, 'a tools-only change must refresh an already-open view')
++  assert.equal(folded.state.detailRev, undefined, 'headers use their event seq without changing persisted counters')
++})
++
++test('v28 checkpoint resume and a cold refold keep comparable detail revisions', () => {
++  const events = Array.from({ length: 45 }, (_, i) => header(i + 1, { tools: [{ name: `tool_${i}` }] }))
++  const { def, state } = driveTimeline(events)
++  // A pre-upgrade v28 checkpoint did not count these header-only events.
++  const cached = { ...state, detailRev: 0 }
++  const next = header(46, { tools: [{ name: 'new_tool' }] })
++  const resumed = def.apply(cached, next)
++  const cold = driveTimeline([...events, next]).state
++  assert.equal(cold.detailRev ?? 0, resumed.detailRev ?? 0)
 +})

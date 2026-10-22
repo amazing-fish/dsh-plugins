@@ -1,0 +1,10 @@
+
+ RUN  v5.0.5 /workspace/scratch/63e06eefa73e/dsh-context-git
+
+--·---------------------------------------------------··-------·
+
+ Test Files  3 passed (3)
+      Tests  4 passed | 60 skipped (64)
+   Start at  21:23:33
+   Duration  5.27s (import 43%, environment 39%, tests 12%, worker 3%, transform 2%, setup 1%)
+

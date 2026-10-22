@@ -6,11 +6,11 @@
     "lib/client.js": "a3c02b20d80a2d8dd220bb1500cc2df9b6a77e9867a5606e5c92e4699e3a5f2b"
   },
   "replacement": {
-    "lib/client.js": "2efe759172f81cd02c8a5fd23118e0f5cdc187501f63024c9f693b9a8c77d615",
+    "lib/client.js": "5a1efef944e0e80aac6cac34ad927834af40b38d46f7afa1c6f8683e2714109c",
     "lib/index.d.ts": "b9de3900ecbdb1a26662c03859d3ef5bc52799038f24e26a8a75af745c12468d",
-    "lib/client.js.map": "df24c39c1d8d612748a36045f353ce2d8db97994580711b464b06a067a3f55b8",
-    "lib/index.js.map": "9663a50bbe8f6061c4176db7c9037b3930f9c73f7ab64f00585014a51611f652",
-    "lib/index.js": "49efd0aa116734d9954dcef4dba39b18f460eee834c1a0f01acecc3be76c3372"
+    "lib/client.js.map": "8874164e945e45d4b1c4b2cd6cd82d5f50953944b38badbca4a612f8d3e01e0c",
+    "lib/index.js.map": "733b126ad025a24e62eca483845760b47d836073ed495c76ee4f131515dce20e",
+    "lib/index.js": "4b4538f7827a761eb642d45b8cf46725344904bee782116a9494616d5db17342"
   },
-  "sourceCommit": "9f1b615c8d893e2a778abf805f9982ffb3cbe9c6"
+  "sourceCommit": "62a63de6b230401abb2a3e3f160e7318be316e21"
 }

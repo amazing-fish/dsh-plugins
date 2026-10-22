@@ -1,6 +1,14 @@
 # dsh-context
 
-## Replacement ready for review (2026-10-22)
+## Current variant: 0.74.0 (2026-10-22)
+
+[slim-headers-0.74.0](./slim-headers-0.74.0) is the same split rebased onto `v0.74.0` — the
+release this machine now runs. Verified on Windows with an isolated HTTP A/B: `session/list`
+6.06 MB → 166 kB on a 300-session synthetic corpus, long-session row 146.9 kB → 556 B,
+45 epochs / 2,250 tools still served through the detail channel, `stateVersion` still 1,
+backfill intact. Use it instead of the 0.73.3 variant below.
+
+## Replacement ready for review (0.73.3 variant)
 
 [slim-headers](./slim-headers) contains the implemented replacement: bounded list envelopes,
 full epoch tool detail on demand, unchanged stateVersion 1, and retained backfill.

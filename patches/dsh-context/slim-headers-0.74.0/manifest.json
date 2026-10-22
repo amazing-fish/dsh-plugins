@@ -1,0 +1,17 @@
+{
+  "id": "dsh-context-0.74.0-slim-headers-v1",
+  "sourceBase": "77749653063a",
+  "sourceBaseTag": "v0.74.0",
+  "pristine": {
+    "lib/index.js": "bb09db0830f70b81bdaaa7d400121ff797656b59550f1774526c5a706738461c",
+    "lib/client.js": "72e53e0f2ab8edd24c18b3bada9b8fd2a752a013fb08812c9ffc075bc3bf8dee"
+  },
+  "replacement": {
+    "lib/index.js": "193424e003edb83c56f7cbe4b76d5cfddf37d730db918cd0602de33e365846ad",
+    "lib/client.js": "9d5413e9ad08487df8c66e9cf8de2041f995a71a239769b4931c7d922b11f665",
+    "lib/index.d.ts": "bd307fb9b307af0806d9b7498945aa52152e68c79dfb8842443a1574a797e9eb"
+  },
+  "portOf": "patches/dsh-context/slim-headers (v0.73.3 variant)",
+  "artifactsInRepo": false,
+  "artifactsNote": "rebuilt per BUILD.md; expected hashes in replacement.*"
+}

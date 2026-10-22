@@ -17,7 +17,7 @@ published package, `b/` is the patched local file. Re-apply by anchor and run
 | [dsh-llm-pi-ai](./dsh-llm-pi-ai) — opencode-camo UA + reasoning-only retry | @deepseek-ai/dsh-llm-pi-ai@0.2.1-rc.2 | active |
 | [dsh-session-format-v0-to-v1](./dsh-session-format-v0-to-v1) — summary + descriptor-v2/cron compat | @deepseek-ai/dsh-session-format-v0-to-v1@0.2.1-rc.2 (identical to 0.2.0-rc.2) | active |
 | [dsh-mnemon](./dsh-mnemon) — recall timeout 120s, sync retain, bounded fan-out, hot-memory limits 51200/8192, per-workspace storage scope (profile-layer config patch) | dsh-mnemon@0.5.33, dsh-mnemon-provider-hindsight@0.5.6, dsh-mnemon-source-memory-spaces@0.5.22 | active |
-| [dsh-context](./dsh-context) — session-list bloat mitigation: contextHeaders stateVersion bump (stale-row eviction) + historical backfill mount removed | dsh-context@0.73.3 (anchor-based, no diff file) | **stopgap** (upstream pending; diverges from upstream's `stateVersion: 1` decision, regrows) |
+| [dsh-context](./dsh-context) — session-list bloat mitigation: contextHeaders stateVersion bump (stale-row eviction) + historical backfill mount removed | dsh-context@0.73.3 (anchor-based, no diff file) | **stopgap running; [replacement implemented](./dsh-context/slim-headers), not deployed** |
 | [hindsight-api-engine](./hindsight-api-engine) — ONNX chunking/threads, length-sorted rerank | hindsight-api-slim==0.9.2 | active |
 | [flashrank-int8-map](./flashrank-int8-map) — bge-zh int8 model map | FlashRank==0.2.10 | active |
 | [dsh-sm-context-piano](./dsh-sm-context-piano.md) | managed as a fork of hjj345345/dsh-sm-context-piano | fork |

@@ -1,0 +1,78 @@
+{
+  "environment": {
+    "runtime": "DSH 0.2.1-rc.2",
+    "platform": "posix",
+    "corpus": "synthetic",
+    "sessions": 2542,
+    "epochs": "45 in bench-0000; 6 elsewhere",
+    "tools_per_epoch": 50
+  },
+  "results": {
+    "baseline": {
+      "samples": [
+        {
+          "bytes": 50410489,
+          "ms": 4609.988,
+          "header_bytes": 49851161
+        },
+        {
+          "bytes": 50410489,
+          "ms": 2522.288,
+          "header_bytes": 49851161
+        },
+        {
+          "bytes": 50410489,
+          "ms": 2231.828,
+          "header_bytes": 49851161
+        },
+        {
+          "bytes": 50410489,
+          "ms": 2189.046,
+          "header_bytes": 49851161
+        }
+      ],
+      "warm_median_ms": 2231.828,
+      "row_header_bytes": 146660,
+      "row_list_bytes": 146879,
+      "detail_epochs": 0,
+      "detail_tools": 0,
+      "legacy_files_unchanged_before_backfill": 2542,
+      "backfill_witness": "bench-2541",
+      "backfill_requests": 1,
+      "list_after_backfill": 2542
+    },
+    "candidate": {
+      "samples": [
+        {
+          "bytes": 1405818,
+          "ms": 1455.092,
+          "header_bytes": 846490
+        },
+        {
+          "bytes": 1405818,
+          "ms": 1181.452,
+          "header_bytes": 846490
+        },
+        {
+          "bytes": 1405818,
+          "ms": 2235.853,
+          "header_bytes": 846490
+        },
+        {
+          "bytes": 1405818,
+          "ms": 2516.387,
+          "header_bytes": 846490
+        }
+      ],
+      "warm_median_ms": 2235.853,
+      "row_header_bytes": 337,
+      "row_list_bytes": 556,
+      "detail_epochs": 45,
+      "detail_tools": 2250,
+      "legacy_files_unchanged_before_backfill": 2542,
+      "backfill_witness": "bench-2541",
+      "backfill_requests": 1,
+      "list_after_backfill": 2542
+    }
+  }
+}

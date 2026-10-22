@@ -1,0 +1,13 @@
+$ bash scripts/check.sh --full
+==> check: lint, typecheck and coverage in parallel
+
+===== lint =====
+$ oxlint
+
+===== typecheck =====
+$ tsc --noEmit -p tsconfig.tests.json --incremental
+
+===== coverage =====
+$ vitest run --coverage
+
+==> check passed: lint, typecheck and 100% per-file coverage (lint/typecheck/coverage output above; logs in .tmp/check-logs)

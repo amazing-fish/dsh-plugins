@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-22",
+  "stage": "PR #12: P2 fixed; updated-HEAD review pending",
+  "goal_prompt_preflight": "skipped: bounded implementation with explicit handoff and acceptance criteria",
+  "source_repository": "https://github.com/bowenliang123/dsh-context",
+  "source_base": "a7ce2158c18bd76bd23dfb64146fd357209c12ce",
+  "source_branch": "fix/slim-header-envelopes",
+  "source_head": "62a63de6b230401abb2a3e3f160e7318be316e21",
+  "help_repository_base": "49b3f4a002ade7874ded44ecee64a7a456b2c380",
+  "help_branch": "fix/context-headers-on-demand",
+  "production_changes": false,
+  "windows_corpus_verified": false,
+  "remaining": "Current-HEAD Codex review and human merge gate. Windows production corpus remains unavailable.",
+  "repository_pr_authorized": true,
+  "repository_pr": "https://github.com/amazing-fish/dsh-plugins/pull/12"
+}

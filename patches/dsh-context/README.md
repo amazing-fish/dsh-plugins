@@ -1,5 +1,17 @@
 # dsh-context
 
+## Replacement ready for review (2026-10-22)
+
+[slim-headers](./slim-headers) contains the implemented replacement: bounded list envelopes,
+full epoch tool detail on demand, unchanged stateVersion 1, and retained backfill.
+It includes complete changed source files, a source patch, paired host/client artifacts,
+an idempotent temporary-package stager, executable HTTP A/B, results and English submission drafts.
+The replacement is prepared for repository review. B12 below remains the production stopgap until a
+separately authorized deployment and maintenance restart. Do not re-apply its version bump
+or removed backfill to the replacement.
+
+The instructions below document the historical stopgap, not the preferred deployment path.
+
 Patches against `dsh-context` (bowenliang123) — the plugin that registers the
 `contextHeaders` session projection (per-session request-header epoch metadata:
 boundaries, token prices, tool attribution). The patch is **anchor-based (no

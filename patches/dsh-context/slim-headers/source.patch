@@ -1,0 +1,715 @@
+diff --git a/docs/compatibility.md b/docs/compatibility.md
+index 6ffab0e..45446d1 100644
+--- a/docs/compatibility.md
++++ b/docs/compatibility.md
+@@ -85,6 +85,8 @@ Last verified: **2026-10-14** (dsh-context `0.70.0`, dsh `0.2.0-rc.2` npm instal
+ *How fold-state changes reach existing installations.*
+ 
+ 1. **Bump a unit's `stateVersion` iff later events cannot backfill the change** — running totals, per-step collections flushed at `step/end`, materialized envelopes. Serve-time-derivable fields need no bump, and new wire fields are additive-optional: a pre-field row serves without them and the client degrades per §5's boundary rules. Current versions sit at each unit's `stateVersion` site; past bumps live in git history.
++- **Header wire split:** while the detail route is live, list projections carry only the newest three envelopes and the retained epoch count; per-epoch tools ride detail. Keep header stateVersion 1: this is a serve-time change. A new header epoch advances the detail revision even without a model change. Channel-less hosts retain the inline fallback. (`src/host/headers.ts`, `src/host/detail.ts`, `tests/host/headers-slim.spec.ts`)
++
+ 2. **Stale rows refold from the durable log**; the warm-up probes BOTH `contextActivity` and `contextTimeline` and cold-refolds missing or stale rows on first page open, so idle sessions rebuild exactly. (`src/host/backfill.ts`)
+ 3. **Every cold read passes the host-wide gate** (issue #121) — FIFO, one at a time, only while the V8 heap sits below two-thirds of its ceiling; a skipped read takes the caller's designed no-data path, never a failure. (`src/host/coldRead.ts`)
+ 4. **The warm-up folds sessions over 2,000 events in in-memory slices** (issue #145) through `sessionProjections.restore`/`hydrate`, `sessions.prepare`, and `sessionProjectionCache.write`, with one write-back at the log end and byte-identical rows to a single-shot `coldSnapshot`; any face absent → the session stays on the single-shot path (the faces exist on every supported line, §8's matrix probes them). (`src/host/backfill.ts`)
+diff --git a/src/client/components/browser.tsx b/src/client/components/browser.tsx
+index 81a6386..9224032 100644
+--- a/src/client/components/browser.tsx
++++ b/src/client/components/browser.tsx
+@@ -759,7 +759,7 @@ export function makeContextBrowser(
+       return elemRow(
+         'tools',
+         catChip('tools'),
+-        t('browser.items', { n: header.tools.length }),
++        t('browser.items', { n: header.toolCount ?? header.tools.length }),
+         breakdown.tools,
+         undefined,
+         catBody('tools'),
+diff --git a/src/client/components/browserHelpers.ts b/src/client/components/browserHelpers.ts
+index cdadef6..a24aabf 100644
+--- a/src/client/components/browserHelpers.ts
++++ b/src/client/components/browserHelpers.ts
+@@ -9,7 +9,7 @@ export interface CatFocus {
+ 
+ export function countOf(asm: Assembled, byCat: Partial<Record<Category, SurfaceNode[]>>, c: string): number {
+   if (c === 'system') return asm.system !== null ? 1 : 0
+-  if (c === 'tools') return asm.header !== null ? asm.header.tools.length : 0
++  if (c === 'tools') return asm.header !== null ? asm.header.toolCount ?? asm.header.tools.length : 0
+   return byCat[c as Category]?.length ?? 0
+ }
+ 
+diff --git a/src/client/components/contextView.tsx b/src/client/components/contextView.tsx
+index 4eb94f2..07ac002 100644
+--- a/src/client/components/contextView.tsx
++++ b/src/client/components/contextView.tsx
+@@ -146,9 +146,8 @@ export function makeContextView(
+     const sessionId = props.sessionId
+     const inSidebar = props.host === 'sidebar'
+     const { source, data, pressure, breakdown, usage } = useContextSession(props)
+-    // `contextHeaders` (full system prompt + tool schemas) for the Context browser; absent on older Host halves →
+-    // tokens-only sections with a note.
+-    const headers = projectionOf(props, 'contextHeaders', headersOf)
++    const projectedHeaders = projectionOf(props, 'contextHeaders', headersOf)
++    const headers = source.headers ?? projectedHeaders
+     const [selectedSeq, setSelectedSeq] = useState<number | null>(null)
+     const [hoveredSeq, setHoveredSeq] = useState<number | null>(null)
+     const [hoverTurn, setHoverTurn] = useState<number | null>(null)
+diff --git a/src/client/dna.ts b/src/client/dna.ts
+index 3e2c094..efa1c6e 100644
+--- a/src/client/dna.ts
++++ b/src/client/dna.ts
+@@ -26,6 +26,10 @@ export function dnaOf(view: Assembled): DnaItem[] {
+     items.push({ key: 'sys', cat: 'system', tokens: view.system.tokens, time: view.system.time })
+   }
+   if (view.header !== null) {
++    const total = view.header.totalToolTokens ?? 0
++    if (view.header.tools.length === 0 && total > 0) {
++      items.push({ key: 'tools', cat: 'tools', tokens: total })
++    }
+     for (const tool of view.header.tools) {
+       items.push({ key: 'tool:' + tool.name, cat: 'tools', tokens: tool.tokens })
+     }
+@@ -106,7 +110,7 @@ export function deltaBandsOf(bands: TrendBand[], prev: TrendBand[] | null): DnaD
+ 
+ /** The compact item name both DNA surfaces share: header bands name the prompt or tool schema, message bands the skill or tool. */
+ export function dnaBaseLabel(b: DnaItem | TrendBand | DeltaBand, t: Translate, catLabel: (key: string) => string): string {
+-  if (!('node' in b)) return b.cat === 'system' ? catLabel('system') : b.key.slice('tool:'.length)
++  if (!('node' in b)) return b.cat === 'system' || b.key === 'tools' ? catLabel(b.cat) : b.key.slice('tool:'.length)
+   const n = b.node
+   return n.skill !== undefined ? t('node.skillTag', { name: n.skill })
+     : n.cat === 'tool' ? (n.tool ?? '?')
+diff --git a/src/client/services.ts b/src/client/services.ts
+index 46bacd9..168ce96 100644
+--- a/src/client/services.ts
++++ b/src/client/services.ts
+@@ -523,6 +523,7 @@ export function timingOf(value: unknown): TimingTotals | null {
+  * (boundaries, token prices, attribution); epoch CONTENT is fetched on demand
+  * (historyPage.ts), never carried here.
+  *
++ * Count-only envelopes normalize to an empty tool table until detail arrives.
+  * One malformed epoch degrades the WHOLE projection to null, because
+  * downstream reads call `tool.name.toLowerCase()` and `b.tokens - a.tokens`
+  * blindly.
+@@ -537,9 +538,12 @@ export function headersOf(value: unknown): ContextHeaders | null {
+   for (const h of headers.headers as unknown[]) {
+     if (h === null || typeof h !== 'object') return null
+     const entry = h as { tools?: unknown; systemTokens?: unknown }
+-    if (!Array.isArray(entry.tools)) return null
++    const summary = h as { toolCount?: unknown; totalToolTokens?: unknown }
++    const counts = [summary.toolCount, summary.totalToolTokens]
++    if (counts.some(n => n !== undefined && (typeof n !== 'number' || !Number.isSafeInteger(n) || n < 0))) return null
++    if (!Array.isArray(entry.tools) && !(entry.tools === undefined && counts.every(n => n !== undefined))) return null
+     if (entry.systemTokens !== undefined && (typeof entry.systemTokens !== 'number' || !Number.isFinite(entry.systemTokens))) return null
+-    for (const t of entry.tools as unknown[]) {
++    for (const t of (entry.tools ?? []) as unknown[]) {
+       if (t === null || typeof t !== 'object') return null
+       const tool = t as { name?: unknown; tokens?: unknown; plugin?: unknown }
+       if (typeof tool.name !== 'string') return null
+@@ -549,7 +553,8 @@ export function headersOf(value: unknown): ContextHeaders | null {
+   }
+   let legacy = false
+   for (const entry of headers.headers as { systemTokens?: unknown; system?: unknown }[]) {
+-    if (entry.systemTokens === undefined && typeof entry.system === 'string' && entry.system !== '') {
++    if (!Array.isArray((entry as { tools?: unknown }).tools)
++      || (entry.systemTokens === undefined && typeof entry.system === 'string' && entry.system !== '')) {
+       legacy = true
+       break
+     }
+@@ -557,9 +562,16 @@ export function headersOf(value: unknown): ContextHeaders | null {
+   if (!legacy) return headers as unknown as ContextHeaders
+   return {
+     headers: (headers.headers as { systemTokens?: number; system?: unknown }[]).map((entry) => {
+-      if (entry.systemTokens !== undefined) return entry
+-      return { ...entry, systemTokens: estimateSystemTokens(entry.system) || undefined }
++      return {
++        ...entry,
++        tools: (entry as { tools?: unknown }).tools ?? [],
++        ...(entry.systemTokens === undefined && typeof entry.system === 'string' && entry.system !== ''
++          ? { systemTokens: estimateSystemTokens(entry.system) }
++          : {}),
++      }
+     }),
++    ...(headers.epochCount !== undefined ? { epochCount: headers.epochCount } : {}),
++    ...(headers.detail === true ? { detail: true } : {}),
+   } as unknown as ContextHeaders
+ }
+ 
+diff --git a/src/client/timelineSource.ts b/src/client/timelineSource.ts
+index 23e9518..5590c74 100644
+--- a/src/client/timelineSource.ts
++++ b/src/client/timelineSource.ts
+@@ -15,10 +15,10 @@
+  */
+ 
+ import { useEffect, useMemo, useSyncExternalStore } from 'react'
+-import type { ContextTimeline, ContextTimelineDetail } from '../shared/types'
++import type { ContextHeaders, ContextTimeline, ContextTimelineDetail } from '../shared/types'
+ import { DETAIL_ROUTE } from './apiRoutes'
+ import type { SessionStandardProps } from './services'
+-import { asRecord, collectionsOf, projectionOf, timelineOf } from './services'
++import { asRecord, collectionsOf, headersOf, projectionOf, timelineOf } from './services'
+ 
+ /** Narrow the detail endpoint's payload; a missing or NaN revision rejects the
+  * whole payload so the caller shows its retryable note, never half-merged data. */
+@@ -29,9 +29,12 @@ export function detailOf(value: unknown): ContextTimelineDetail | null {
+   // The slim head rides the payload for the Agent network's cold-node ring
+   // fetch; a malformed head drops out rather than rejecting the whole payload.
+   const head = timelineOf(data.head)
++  const headers = headersOf(data.headers)
++  if (data.headers !== undefined && headers === null) return null
+   return {
+     rev: data.rev,
+     ...(head !== null ? { head } : {}),
++    ...(headers !== null ? { headers } : {}),
+     ...collectionsOf(data),
+   }
+ }
+@@ -275,6 +278,7 @@ export function resetTimelineDetailStores(): void {
+ export type DetailState = 'legacy' | 'loading' | 'ready' | 'failed'
+ 
+ export interface TimelineSource {
++  headers?: ContextHeaders
+   /** The value the cards render: the inline generation's value, or the slim head merged with the fetched detail collections. */
+   data: ContextTimeline | null
+   detailState: DetailState
+@@ -340,6 +344,6 @@ export function useTimelineSource(props: SessionStandardProps): TimelineSource {
+       ...(detail.fileOpsFloor !== undefined ? { fileOpsFloor: detail.fileOpsFloor } : {}),
+       ...(detail.spans !== undefined ? { spans: detail.spans } : {}),
+     }
+-    return { data, detailState: 'ready', retryDetail: retry }
++    return { data, detailState: 'ready', retryDetail: retry, ...(detail.headers !== undefined ? { headers: detail.headers } : {}) }
+   }, [head, slim, store, snap])
+ }
+diff --git a/src/client/treemap.ts b/src/client/treemap.ts
+index 49b9ac3..bc9fa48 100644
+--- a/src/client/treemap.ts
++++ b/src/client/treemap.ts
+@@ -83,6 +83,10 @@ export function mapOf(view: Assembled, t: Translate, catLabel: (key: string) =>
+     })
+   }
+   if (view.header !== null) {
++    const total = view.header.totalToolTokens ?? 0
++    if (view.header.tools.length === 0 && total > 0) {
++      cats.push({ cat: 'tools', tokens: total, blocks: [{ key: 'tools', label: catLabel('tools'), tokens: total, count: view.header.toolCount ?? 0 }] })
++    }
+     pushCat(cats, 'tools', view.header.tools
+       .filter(tool => tool.tokens > 0)
+       .map(tool => ({ key: 'tools:' + tool.name, label: tool.name, tokens: tool.tokens, count: 1, elem: 'tool:' + tool.name })), t)
+diff --git a/src/host/detail.ts b/src/host/detail.ts
+index b228043..5b340b6 100644
+--- a/src/host/detail.ts
++++ b/src/host/detail.ts
+@@ -24,6 +24,7 @@ import { type ConnectionHostFace, registerPostRoute } from './connection'
+ import { applyTimeline } from './fold'
+ import { createTimelineState } from './foldState'
+ import { buildTimelineDetail } from './foldWire'
++import { createContextHeadersDefinition } from './headers'
+ 
+ /** The plugin's detail route, under the authenticated `/api` fence. */
+ export const DETAIL_ROUTE = '/api/dsh-context/detail'
+@@ -79,8 +80,12 @@ function failure(code: string, message: string): Response {
+ 
+ /** Serve the detail route whenever the connection and sessions services are both composed (see
+  * the module header). Either service unloading withdraws the route and closes the gate. */
+-export function watchDetailChannel(ctx: Context, bounds: FoldBounds, coldReads: ColdReadGate = makeColdReadGate()): DetailChannelGate {
++export function watchDetailChannel(
++  ctx: Context, bounds: FoldBounds, coldReads: ColdReadGate = makeColdReadGate(),
++  resolve?: (name: string) => string | undefined,
++): DetailChannelGate {
+   const gate = { live: false }
++  const headers = createContextHeadersDefinition(resolve)
+   // The cold payload cache lives in this closure: a config remount re-runs the watch, so a
+   // bounds change never serves a payload folded under different bounds.
+   const payloads = new Map<string, ColdPayload>()
+@@ -110,7 +115,12 @@ export function watchDetailChannel(ctx: Context, bounds: FoldBounds, coldReads:
+           // Live session: the registry's current fold state — no second fold, never mutated.
+           const state = projections.stateOf(session as never, 'contextTimeline')
+           if (state === undefined) return reply({ ok: true, value: null })
+-          return reply({ ok: true, value: buildTimelineDetail(state, bounds) })
++          const headerState = projections.stateOf(session as never, 'contextHeaders')
++          const value = {
++            ...buildTimelineDetail(state, bounds),
++            ...(headerState !== undefined ? { headers: headers.wire.view(headerState) } : {}),
++          }
++          return reply({ ok: true, value })
+         }
+         // Cold session: observe it and fold the detail from its immutable log. The read runs
+         // through the shared cold-read gate; a skip under heap pressure resolves to the same
+@@ -137,12 +147,14 @@ export function watchDetailChannel(ctx: Context, bounds: FoldBounds, coldReads:
+             const events = (observation as { events?: unknown } | null)?.events
+             if (!Array.isArray(events)) return null
+             let state = createTimelineState()
++            let headerState = headers.init()
+             let folded = 0
+             for (const ev of events) {
+               state = applyTimeline(state, ev as never, bounds)
++              headerState = headers.apply(headerState, ev as never)
+               if (++folded % FOLD_YIELD_EVENTS === 0) await new Promise(resolve => setTimeout(resolve, 0))
+             }
+-            const detail = buildTimelineDetail(state, bounds)
++            const detail = { ...buildTimelineDetail(state, bounds), headers: headers.wire.view(headerState) }
+             if (revision !== undefined) {
+               payloads.delete(sessionId)
+               payloads.set(sessionId, { persistence, revision, value: detail })
+diff --git a/src/host/fold.ts b/src/host/fold.ts
+index e2d6aa2..a4c47f0 100644
+--- a/src/host/fold.ts
++++ b/src/host/fold.ts
+@@ -42,7 +42,7 @@ function categoryOf(type: string, message: { source?: MessageSource } | undefine
+ }
+ 
+ /** Mark the detail collections dirty. Fold branches that touch only the working slots (stepStart, callNames, the
+- * shadow claim) or the envelope scalars must NOT bump — the served detail is unchanged and an open tab has nothing to refetch.
++ * shadow claim) or capacity scalars must NOT bump — the served detail is unchanged and an open tab has nothing to refetch.
+  */
+ function bumpDetailRev(st: TimelineState): void {
+   st.detailRev = (st.detailRev ?? 0) + 1
+@@ -326,8 +326,8 @@ export function applyTimeline(state: TimelineState, event: TimelineEvent, bounds
+         // reason 'change' ('initial' opens a session, 'resume' reopens it).
+         if ((data?.reason === 'change' || data?.reason === 'resume') && s.model && s.lastModel && s.model !== s.lastModel) {
+           s.events.push({ seq: event.seq, time: event.time, kind: 'model', from: s.lastModel, to: s.model })
+-          bumpDetailRev(s)
+         }
++        bumpDetailRev(s)
+         if (s.model) s.lastModel = s.model
+         break
+       }
+diff --git a/src/host/headers.ts b/src/host/headers.ts
+index d265566..8350f1c 100644
+--- a/src/host/headers.ts
++++ b/src/host/headers.ts
+@@ -21,6 +21,7 @@ import { estimateToolSchema } from './pricing'
+ import { estimateSystemTokens } from '../shared/estimate'
+ 
+ const HEADERS_MAX = 50
++const WIRE_HEADERS_MAX = 3
+ 
+ /** One stored tool: v1 rows carried the producer description and raw schema; later folds append metadata-only. */
+ interface StoredHeaderTool {
+@@ -78,7 +79,11 @@ export const contextHeadersSchema = z.object({
+     // Absent when the epoch logged no system prompt; sizes the section pre-fetch.
+     systemTokens: z.number().int().nonnegative().optional(),
+     tools: z.array(headerToolWireSchema),
++    toolCount: z.number().int().nonnegative().optional(),
++    totalToolTokens: z.number().int().nonnegative().optional(),
+   }).strict()),
++  epochCount: z.number().int().nonnegative().optional(),
++  detail: z.literal(true).optional(),
+ }).strict() as unknown as z.ZodType<ContextHeaders>
+ 
+ function recordOf(event: SessionEvent): StoredHeaderRecord | null {
+@@ -119,27 +124,34 @@ function recordOf(event: SessionEvent): StoredHeaderRecord | null {
+  */
+ export function createContextHeadersDefinition(
+   resolve?: (name: string) => string | undefined,
++  slim: () => boolean = () => false,
+ ): ProjectionDefinition<'contextHeaders', HeadersState> {
+   // The view normalizes both stored generations to the metadata-only wire shape: legacy v1
+   // epochs are stripped of their content here (the system text is priced once per read).
+-  const view = (state: HeadersState): ContextHeaders => ({
+-    headers: state.headers.map((h): HeaderRecord => {
+-      const record: HeaderRecord = {
+-        seq: h.seq,
+-        time: h.time,
+-        tools: h.tools.map((t): HeaderTool => {
+-          const entry: HeaderTool = { name: t.name, tokens: t.tokens }
+-          const plugin = t.plugin ?? (resolve !== undefined ? resolve(t.name) : undefined)
+-          if (plugin !== undefined) entry.plugin = plugin
+-          return entry
+-        }),
+-      }
+-      const systemTokens = h.systemTokens
+-        ?? (typeof h.system === 'string' && h.system !== '' ? estimateSystemTokens(h.system) : undefined)
+-      if (systemTokens !== undefined) record.systemTokens = systemTokens
+-      return record
+-    }),
+-  })
++  const view = (state: HeadersState): ContextHeaders => {
++    const split = slim()
++    const retained = state.headers.slice(-HEADERS_MAX)
++    return {
++      ...(split ? { epochCount: retained.length, detail: true as const } : {}),
++      headers: (split ? retained.slice(-WIRE_HEADERS_MAX) : retained).map((h): HeaderRecord => {
++        const record: HeaderRecord = {
++          seq: h.seq,
++          time: h.time,
++          ...(split ? { toolCount: h.tools.length, totalToolTokens: h.tools.reduce((sum, t) => sum + t.tokens, 0) } : {}),
++          tools: split ? [] : h.tools.map((t): HeaderTool => {
++            const entry: HeaderTool = { name: t.name, tokens: t.tokens }
++            const plugin = t.plugin ?? (resolve !== undefined ? resolve(t.name) : undefined)
++            if (plugin !== undefined) entry.plugin = plugin
++            return entry
++          }),
++        }
++        const systemTokens = h.systemTokens
++          ?? (typeof h.system === 'string' && h.system !== '' ? estimateSystemTokens(h.system) : undefined)
++        if (systemTokens !== undefined) record.systemTokens = systemTokens
++        return record
++      }),
++    }
++  }
+   const definition: ProjectionDefinition<'contextHeaders', HeadersState> = {
+     key: 'contextHeaders',
+     stateSchema: contextHeadersStateSchema,
+diff --git a/src/host/index.ts b/src/host/index.ts
+index 83c79dc..3e6341b 100644
+--- a/src/host/index.ts
++++ b/src/host/index.ts
+@@ -64,9 +64,10 @@ export function apply(ctx: Context, config: Config): void {
+   const attribution = createToolAttribution(ctx)
+   watchStepIdentity(ctx)
+   // The unit's view reads the gate per serve: slim wire while the detail channel is live, inline otherwise.
+-  const gate = watchDetailChannel(ctx, resolveBounds(config), coldReads)
++  const resolveTool = (name: string) => attribution.ownerOf(name)
++  const gate = watchDetailChannel(ctx, resolveBounds(config), coldReads, resolveTool)
+   ctx.sessionProjections.register(createContextTimelineDefinition(config, () => gate.live))
+-  ctx.sessionProjections.register(createContextHeadersDefinition(name => attribution.ownerOf(name)))
++  ctx.sessionProjections.register(createContextHeadersDefinition(resolveTool, () => gate.live))
+   ctx.sessionProjections.register(createContextActivityDefinition())
+   watchActivityBackfill(ctx, coldReads)
+   watchPromptInjection(ctx, config)
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index 05e2113..bae5b78 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -257,6 +257,8 @@ export interface Snapshot {
+  * longer carries (host/detail.ts). `rev` mirrors the head's `detailRev` and is the client's latest-wins cursor. */
+ export interface ContextTimelineDetail {
+   rev: number
++  /** Full retained header epochs; fetched with the timeline at the same fold cut. */
++  headers?: ContextHeaders
+   /** The slim head at the SAME fold cut as the collections — a session listed cold has no
+    * `contextTimeline` row, so the Agent network ring reads this. Optional. */
+   head?: ContextTimeline
+@@ -501,11 +503,17 @@ export interface HeaderRecord {
+   /** The epoch's estimated system-prompt tokens; absent when it logged no system prompt. */
+   systemTokens?: number
+   tools: HeaderTool[]
++  /** Present on a list envelope whose tool table rides the detail channel. */
++  toolCount?: number
++  totalToolTokens?: number
+ }
+ 
+ /** The `contextHeaders` projection value: the bounded epoch list (newest last). */
+ export interface ContextHeaders {
+   headers: HeaderRecord[]
++  /** Number of retained epochs, including those outside the list's small tail. */
++  epochCount?: number
++  detail?: true
+ }
+ 
+ /** The fetched CONTENT of one request-header epoch, mapped client-side off the raw durable event
+diff --git a/tests/client/components/contextView.fileActivity.spec.ts b/tests/client/components/contextView.fileActivity.spec.ts
+index ecc824e..f1da60d 100644
+--- a/tests/client/components/contextView.fileActivity.spec.ts
++++ b/tests/client/components/contextView.fileActivity.spec.ts
+@@ -5,7 +5,7 @@ import { DICT_EN } from '../../../src/client/i18n'
+ import type { UseChatLike } from '../../../src/client/services'
+ import type { ContextTimeline } from '../../../src/shared/types'
+ import { TestClientCtx } from '../helpers/harness'
+-import { click, flush, hover, mount, query, queryAll, text, unhover } from '../helpers/kit'
++import { click, flush, hover, mount, query, queryAll, text, unhover, until } from '../helpers/kit'
+ import { buttonByText, makeView, projectionsFor, T0, timeline } from './contextViewHarness'
+ 
+ describe('ContextView — file activity card', () => {
+@@ -93,8 +93,7 @@ describe('ContextView — file activity card', () => {
+     await hover(query(m.container, '.lc-bar[data-seq="4"]'))
+     await hover(query(m.container, '.lc-bar[data-seq="6"]'))
+     clock.mockRestore()
+-    await rest()
+-    assert.ok(text(card).includes('Turn 0 · Step 0'))
++    await until(() => text(card).includes('Turn 0 · Step 0'), 'the trailing hover never settled')
+     await m.unmount()
+   })
+ 
+diff --git a/tests/client/components/contextView.splitDetail.spec.ts b/tests/client/components/contextView.splitDetail.spec.ts
+index 2b8ed23..34d130c 100644
+--- a/tests/client/components/contextView.splitDetail.spec.ts
++++ b/tests/client/components/contextView.splitDetail.spec.ts
+@@ -200,3 +200,23 @@ describe('ContextView — the op-log generation (fileOps on the detail payload)'
+     await m.unmount()
+   })
+ })
++
++test('ContextView replaces count-only envelopes with all 45 fetched header epochs', async () => {
++  const headers = { headers: Array.from({ length: 45 }, (_, i) => ({
++    seq: i + 1, time: T0 + i, tools: [{ name: `epoch_tool_${i}`, tokens: 12 }],
++  })) }
++  vi.stubGlobal('fetch', async () => ({ ok: true, json: async () => ({
++    ok: true, value: { rev: 6, requests: [], events: [], nodes: [], droppedNodes: 0, archive: [], headers },
++  }) }))
++  const View = makeView(new TestClientCtx())
++  const m = await mount(h(View, { sessionId: 'headers-detail-view', useProjection: projectionsFor(
++    timeline({ detailRev: 6 }),
++    { contextHeaders: { headers: [{ seq: 45, time: T0, toolCount: 1, totalToolTokens: 12 }], epochCount: 45, detail: true } },
++  ) }))
++  await until(() => !text(m.container).includes(DICT_EN['detail.loading']), 'header detail did not land')
++  const tools = queryAll(m.container, '.lc-br-cat-row').find(el => text(el).includes('Tool Schemas'))
++  assert.ok(tools !== undefined)
++  await click(tools)
++  assert.ok(text(m.container).includes('epoch_tool_44'), 'the latest epoch tool is rendered from detail')
++  await m.unmount()
++})
+diff --git a/tests/client/dna.spec.ts b/tests/client/dna.spec.ts
+index 74e76bc..2d7edf0 100644
+--- a/tests/client/dna.spec.ts
++++ b/tests/client/dna.spec.ts
+@@ -195,3 +195,10 @@ describe('deltaBandsOf', () => {
+     assert.equal(dnaBaseLabel(d.down[0], kit.t, kit.catLabel), 'write')
+   })
+ })
++
++test('count-only header envelopes retain an aggregate tool band until detail arrives', () => {
++  const bands = dnaOf(asm({ header: header({ totalToolTokens: 42, toolCount: 3 }) }))
++  assert.deepEqual(bands, [{ key: 'tools', cat: 'tools', tokens: 42 }])
++  const kit = makeKit()
++  assert.equal(dnaBaseLabel(bands[0], kit.t, kit.catLabel), kit.catLabel('tools'))
++})
+diff --git a/tests/client/services.spec.ts b/tests/client/services.spec.ts
+index 915645c..47f8f92 100644
+--- a/tests/client/services.spec.ts
++++ b/tests/client/services.spec.ts
+@@ -895,3 +895,19 @@ describe('entrySeated — the slot-ledger second-mount guard', () => {
+     assert.deepEqual(asked, ['conversation.chat.assistant-actions'])
+   })
+ })
++
++test('headersOf accepts count-only envelopes and keeps consumers safe', () => {
++  const summary = { seq: 4, time: 5, toolCount: 3, totalToolTokens: 42 }
++  const result = headersOf({ headers: [summary], epochCount: 45, detail: true })
++  assert.ok(result !== null)
++  assert.deepEqual(result.headers[0].tools, [])
++  assert.equal(result.headers[0].toolCount, 3)
++  assert.equal(result.headers[0].totalToolTokens, 42)
++  assert.equal(result.epochCount, 45)
++  assert.equal(result.detail, true)
++  assert.equal(headersOf({ headers: [{ ...summary, toolCount: undefined }] }), null)
++  for (const bad of [-1, NaN, Infinity, 1.5, '3', null]) {
++    assert.equal(headersOf({ headers: [{ ...summary, toolCount: bad }] }), null)
++    assert.equal(headersOf({ headers: [{ ...summary, totalToolTokens: bad }] }), null)
++  }
++})
+diff --git a/tests/client/timelineSource.spec.ts b/tests/client/timelineSource.spec.ts
+index b7aedfa..c2850bc 100644
+--- a/tests/client/timelineSource.spec.ts
++++ b/tests/client/timelineSource.spec.ts
+@@ -875,3 +875,9 @@ describe('useTimelineSource', () => {
+     await m.unmount()
+   })
+ })
++
++test('detailOf preserves full header epochs and rejects malformed header detail', () => {
++  const headers = { headers: [{ seq: 1, time: 2, tools: [{ name: 'deep_tool', tokens: 20 }] }] }
++  assert.deepEqual(detailOf(detail(1, { headers }))?.headers, headers)
++  assert.equal(detailOf(detail(1, { headers: {} })), null)
++})
+diff --git a/tests/client/treemap.spec.ts b/tests/client/treemap.spec.ts
+index 9a7fc7c..832d9e6 100644
+--- a/tests/client/treemap.spec.ts
++++ b/tests/client/treemap.spec.ts
+@@ -199,3 +199,13 @@ describe('squarify', () => {
+     assert.ok(Math.abs(out[3].rect.y - out[2].rect.h) < 1e-9 && Math.abs(out[3].rect.x - 70) < 1e-9, 'd sits under c')
+   })
+ })
++
++test('count-only headers retain total tool area without inventing per-tool entries', () => {
++  for (const toolCount of [undefined, 3]) {
++    const view = asm({ header: { ...header([]), totalToolTokens: 42, ...(toolCount !== undefined ? { toolCount } : {}) } })
++    const [tools] = mapOf(view, kit.t, kit.catLabel)
++    assert.equal(tools.tokens, 42)
++    assert.equal(tools.blocks[0].count, toolCount ?? 0)
++    assert.equal(tools.blocks[0].label, kit.catLabel('tools'))
++  }
++})
+diff --git a/tests/host/detail.spec.ts b/tests/host/detail.spec.ts
+index c2f8413..8566e27 100644
+--- a/tests/host/detail.spec.ts
++++ b/tests/host/detail.spec.ts
+@@ -4,6 +4,8 @@
+ import assert from 'node:assert/strict'
+ import { describe, test, vi } from 'vitest'
+ import type { Context } from '@deepseek-ai/cordis'
++import { createContextHeadersDefinition } from '../../src/host/headers'
++import type { ContextHeaders } from '../../src/shared/types'
+ import { DETAIL_ROUTE, watchDetailChannel } from '../../src/host/detail'
+ import { resolveBounds } from '../../src/host/config'
+ import type { TimelineState } from '../../src/host/fold'
+@@ -150,7 +152,7 @@ describe('the detail route', () => {
+     return ctxOf({
+       connection: { fetch: { register: () => () => {} } },
+       sessions: sessionsWith(okSession()),
+-      stateOf: () => state,
++      stateOf: (_session, key) => key === 'contextTimeline' ? state : undefined,
+     })
+   }
+ 
+@@ -305,7 +307,7 @@ describe('the detail route', () => {
+     watchDetailChannel(ctx, BOUNDS)
+     const result = await call(captured, { sessionId: 's1' }) as { ok: true; value: { rev: number; requests: unknown[]; nodes: unknown[]; head: { current: { total: number } } } }
+     assert.equal(result.ok, true)
+-    assert.equal(result.value.rev, 2, 'two detail-mutating folds')
++    assert.equal(result.value.rev, 3, 'header, user and assistant each mutate detail')
+     assert.equal(result.value.requests.length, 1)
+     assert.equal(result.value.nodes.length, 2)
+     assert.ok(result.value.head.current.total > 0, 'the slim head rides the live read too')
+@@ -395,14 +397,14 @@ describe('the cold fold (issue #145)', () => {
+       watchDetailChannel(ctx, BOUNDS)
+       const result = await call(captured, { sessionId: 'cold1' }) as { ok: boolean; value: unknown }
+       assert.equal(result.ok, true)
+-      const reference = buildTimelineDetail(driveTimeline(events).state, BOUNDS)
++      const reference = { ...buildTimelineDetail(driveTimeline(events).state, BOUNDS), headers: { headers: [{ seq: 1, time: 10000, tools: [] }] } }
+       assert.deepStrictEqual(result.value, reference, 'the yielding fold produces the identical payload')
+       const yields = timerSpy.mock.calls.filter(args => args[1] === 0).length
+       assert.equal(yields, 2, 'two macrotask yields across 2,001 events')
+     } finally {
+       timerSpy.mockRestore()
+     }
+-  })
++  }, 15_000)
+ 
+   test('an unchanged log (same durable revision) re-serves the payload without refolding', async () => {
+     const events = manyEvents(5)
+@@ -518,3 +520,31 @@ describe('the cold fold (issue #145)', () => {
+     assert.equal(eventReads, 2, 'the remounted route folds against its own cache')
+   })
+ })
++
++test('live and cold detail serve all retained header tools with attribution', async () => {
++  const headers = createContextHeadersDefinition()
++  const events = Array.from({ length: 45 }, (_, i) => header(i + 1, {
++    tools: [{ name: `tool_${i}`, description: `epoch ${i}`, parameters: { type: 'object' } }],
++  }))
++  let headerState = headers.init()
++  for (const ev of events) headerState = headers.apply(headerState, ev as never)
++  const state = driveTimeline(events).state
++  for (const live of [false, true]) {
++    const { ctx, captured } = ctxOf({
++      connection: { fetch: { register: () => () => {} } },
++      sessions: { get: () => live ? { id: 's1' } : undefined },
++      stateOf: (_session, key) => key === 'contextHeaders' ? headerState : state,
++      sessionQuery: { observeSession: async () => ({ revision: 'r1', events }) },
++    })
++    watchDetailChannel(ctx, BOUNDS, undefined, name => `owner:${name}`)
++    const result = await call(captured, { sessionId: 's1' }) as { ok: boolean; value: { headers: ContextHeaders } }
++    assert.equal(result.ok, true)
++    assert.equal(result.value.headers.headers.length, 45)
++    result.value.headers.headers.forEach((epoch, i) => {
++      assert.equal(epoch.seq, i + 1)
++      assert.equal(epoch.tools[0].name, `tool_${i}`)
++      assert.equal(epoch.tools[0].plugin, `owner:tool_${i}`)
++      assert.ok(epoch.tools[0].tokens > 0)
++    })
++  }
++})
+diff --git a/tests/host/fold-split.spec.ts b/tests/host/fold-split.spec.ts
+index 7b4e904..56c69b5 100644
+--- a/tests/host/fold-split.spec.ts
++++ b/tests/host/fold-split.spec.ts
+@@ -47,15 +47,15 @@ function canonicalLog(): TimelineEvent[] {
+ describe('the detailRev ledger', () => {
+   test('bumps exactly on the detail-mutating folds of the canonical log', () => {
+     // Mutations: userMessage(5), assistantMessage(6), toolResult(8),
+-    // stepEnd(9, the strip's span flush), assistantMessage(10), compaction(11), planMode(12) — seven in total.
++    // stepEnd(9, the strip's span flush), assistantMessage(10), compaction(11), planMode(12) and header(1) — eight in total.
+     const { state } = driveTimeline(canonicalLog())
+-    assert.equal(state.detailRev, 7)
++    assert.equal(state.detailRev, 8)
+   })
+ 
+-  test('the working-slot and envelope folds do NOT bump (nothing to refetch)', () => {
++  test('working slots do not bump; a new header epoch does', () => {
+     const { def, state } = driveTimeline(canonicalLog())
+     // step/start (arms the step slot), tool/call (arms the call ledger),
+-    // request/context (capacity metadata), and a header with an UNCHANGED model all leave the detail collections as-is.
++    // request/context (capacity metadata), leave the detail collections as-is; a new header still needs its tool table refetched.
+     const follow: TimelineEvent[] = [
+       requestContext(13, { contextWindow: 256000 }),
+       header(14, { model: 'deepseek-v4-flash', provider: 'deepseek', reason: 'change' }),
+@@ -64,15 +64,15 @@ describe('the detailRev ledger', () => {
+     ]
+     let st = state
+     for (const ev of follow) st = def.apply(st, ev)
+-    assert.equal(st.detailRev, 7, 'no detail mutation, no bump')
+-    // The capacity metadata and the header DID fold (state changed) — only the rev stayed.
++    assert.equal(st.detailRev, 9, 'the new header epoch refreshes its tool detail')
++    // The capacity metadata and the header DID fold (state changed) — the header advances the revision too.
+     assert.notEqual(st, state)
+   })
+ 
+   test('a real model switch bumps (the events collection gains a row)', () => {
+     const { def, state } = driveTimeline(canonicalLog())
+     const switched = def.apply(state, header(13, { model: 'deepseek-v4-pro', provider: 'deepseek', reason: 'change' }))
+-    assert.equal(switched.detailRev, 8)
++    assert.equal(switched.detailRev, 9)
+   })
+ 
+   test('the rev is plain JSON and survives the state gate', () => {
+@@ -101,7 +101,7 @@ describe('buildTimelineHead', () => {
+     // The headline anchor is the newest retained request's billing summary.
+     const lastReq = state.requests.at(-1)!
+     assert.deepEqual(head.last, { seq: lastReq.seq, total: lastReq.total, prompt: 20 })
+-    assert.equal(head.detailRev, 7)
++    assert.equal(head.detailRev, 8)
+     // The collections stay empty on the head — the detail channel serves them.
+     assert.deepEqual(head.requests, [])
+     assert.deepEqual(head.events, [])
+@@ -173,7 +173,7 @@ describe('buildTimelineDetail', () => {
+   test('serves the same collections the inline view serves, plus the revision and the head', () => {
+     const { state, view } = driveTimeline(canonicalLog())
+     const detail = buildTimelineDetail(state, resolveBounds({}))
+-    assert.equal(detail.rev, 7)
++    assert.equal(detail.rev, 8)
+     assert.deepEqual(detail.requests, view.requests)
+     assert.deepEqual(detail.events, view.events)
+     assert.deepEqual(detail.nodes, view.nodes)
+diff --git a/tests/host/headers-slim.spec.ts b/tests/host/headers-slim.spec.ts
+new file mode 100644
+index 0000000..264d08a
+--- /dev/null
++++ b/tests/host/headers-slim.spec.ts
+@@ -0,0 +1,46 @@
++import assert from 'node:assert/strict'
++import { test } from 'vitest'
++import { createContextHeadersDefinition } from '../../src/host/headers'
++import { driveTimeline } from './helpers/projection'
++import { header } from './helpers/events'
++
++test('a legacy v1 row serves a bounded envelope without migration or tool attribution work', () => {
++  let slim = true
++  let resolutions = 0
++  const def = createContextHeadersDefinition(() => { resolutions++; return 'owner' }, () => slim)
++  const state = { headers: Array.from({ length: 50 }, (_, i) => ({
++    seq: i + 1, time: 1700000000000 + i, system: 'legacy system',
++    tools: Array.from({ length: 100 }, (_, j) => ({ name: `tool_${j}`, tokens: j + 1, schema: { type: 'object' } })),
++  })) }
++  const before = JSON.stringify(state)
++  const value = def.wire.viewSchema.parse(def.wire.view(def.stateSchema.parse(state)))
++  assert.equal(def.stateVersion, 1)
++  assert.equal(value.epochCount, 50)
++  assert.equal(value.detail, true)
++  assert.equal(value.headers.length, 3)
++  assert.equal(value.headers[0].seq, 48)
++  assert.equal(value.headers[0].toolCount, 100)
++  assert.equal(value.headers[0].totalToolTokens, 5050)
++  assert.deepEqual(value.headers[0].tools, [])
++  assert.ok(value.headers[0].systemTokens! > 0)
++  assert.ok(Buffer.byteLength(JSON.stringify(value)) <= 2048)
++  assert.equal(resolutions, 0)
++  assert.equal(JSON.stringify(state), before)
++  slim = false
++  const inline = def.wire.view(state)
++  assert.equal(inline.headers.length, 50)
++  assert.equal(inline.headers[0].tools.length, 100)
++  assert.equal(inline.headers[0].tools[0].plugin, 'owner')
++  assert.equal(inline.detail, undefined)
++})
++
++test('empty split state and newly appended epochs keep the v1 state and advance detail revisions', () => {
++  const def = createContextHeadersDefinition(undefined, () => true)
++  assert.deepEqual(def.wire.view(def.init()), { epochCount: 0, detail: true, headers: [] })
++  const event = header(1, { tools: [{ name: 'tool', description: 'first' }] })
++  const state = def.apply(def.init(), event as never)
++  assert.equal(def.wire.view(state).headers[0].toolCount, 1)
++  const events = [event, header(2, { tools: [{ name: 'other', description: 'second' }] })]
++  const folded = driveTimeline(events)
++  assert.equal(folded.state.detailRev, 2, 'a tools-only change must refresh an already-open view')
++})

@@ -1,0 +1,24 @@
+$ tsdown
+ℹ tsdown v0.23.0 powered by rolldown v1.2.11
+ℹ config file: /workspace/scratch/63e06eefa73e/dsh-context-git/tsdown.config.ts 
+ℹ [dsh-context] entry: src/host/index.ts
+ℹ [dsh-context] target: es2024
+ℹ [dsh-context] tsconfig: tsconfig.json
+ℹ [dsh-context/client] entry: src/client/index.ts
+ℹ [dsh-context/client] target: es2024
+ℹ [dsh-context/client] tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 5 files
+
+ WARN  TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+
+ℹ Emit types with typescript@7.0.2
+ℹ [dsh-context/client] [CJS] lib/client.js      479.27 kB │ gzip: 127.05 kB
+ℹ [dsh-context/client] [CJS] lib/client.js.map    6.77 MB
+ℹ [dsh-context/client] [CJS] 2 files, total: 7.25 MB
+✔ [dsh-context/client] Build complete in 936ms
+ℹ [dsh-context] [ESM] lib/index.js       69.06 kB │ gzip:  20.46 kB
+ℹ [dsh-context] [ESM] lib/index.js.map  380.32 kB │ gzip: 111.01 kB
+ℹ [dsh-context] [ESM] lib/index.d.ts     29.59 kB │ gzip:   9.79 kB
+ℹ [dsh-context] [ESM] 3 files, total: 478.97 kB
+✔ [dsh-context] Build complete in 1127ms

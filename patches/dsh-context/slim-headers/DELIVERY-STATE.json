@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-22",
+  "stage": "ready for repository PR review",
+  "goal_prompt_preflight": "skipped: bounded implementation with explicit handoff and acceptance criteria",
+  "source_repository": "https://github.com/bowenliang123/dsh-context",
+  "source_base": "a7ce2158c18bd76bd23dfb64146fd357209c12ce",
+  "source_branch": "fix/slim-header-envelopes",
+  "source_head": "9f1b615c8d893e2a778abf805f9982ffb3cbe9c6",
+  "help_repository_base": "49b3f4a002ade7874ded44ecee64a7a456b2c380",
+  "help_branch": "fix/context-headers-on-demand",
+  "production_changes": false,
+  "windows_corpus_verified": false,
+  "remaining": "Run repository PR review and present current diff evidence; production deployment and external upstream submissions remain separate.",
+  "repository_pr_authorized": true
+}

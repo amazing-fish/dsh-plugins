@@ -1,5 +1,13 @@
 # patches
 
+> **ARCHIVED 2026-10-26 — snapshot, no longer synced.** This directory mirrors
+> one machine's local patch library as of the archival commit. The
+> authoritative, always-current copy is `~/.dsh/patches` on that machine
+> (`PATCHES.md` is the index, `check-patches.ps1` the verifier,
+> `apply-mnemon-patches.ps1` the replay tool). Patches applied after this
+> snapshot exist only there. Read these as historical reference diffs, not as
+> a live catalogue.
+
 Environment patches for bundled dependencies of DeepSeek Harness (and its
 memory stack) that are too small to ship as plugins but too annoying to lose
 on every upgrade / reinstall. None of these are npm packages — they are

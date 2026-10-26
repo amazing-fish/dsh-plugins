@@ -15,6 +15,7 @@ published package, `b/` is the patched local file. Re-apply by anchor and run
 | --- | --- | --- |
 | [openai-503-body](./openai-503-body) | openai@7.19.0 (bundled in @deepseek-ai/dsh 0.2.1-rc.2) | active |
 | [dsh-llm-pi-ai](./dsh-llm-pi-ai) — opencode-camo UA + reasoning-only retry | @deepseek-ai/dsh-llm-pi-ai@0.2.1-rc.2 | active |
+| [dsh-api-session-controller](./dsh-api-session-controller) — session-list activity also counts scheduled deliveries (time + order) | @deepseek-ai/dsh-api-session-controller@0.2.1-rc.2 | active |
 | [dsh-session-format-v0-to-v1](./dsh-session-format-v0-to-v1) — summary + descriptor-v2/cron compat | @deepseek-ai/dsh-session-format-v0-to-v1@0.2.1-rc.2 (identical to 0.2.0-rc.2) | active |
 | [dsh-mnemon](./dsh-mnemon) — recall timeout 120s, sync retain, bounded fan-out, hot-memory limits 51200/8192, per-workspace storage scope (profile-layer config patch) | dsh-mnemon@0.5.33, dsh-mnemon-provider-hindsight@0.5.6, dsh-mnemon-source-memory-spaces@0.5.22 | active |
 | [dsh-context](./dsh-context) — session-list bloat mitigation: contextHeaders stateVersion bump (stale-row eviction) + historical backfill mount removed | dsh-context@0.73.3 (anchor-based, no diff file) | **stopgap running; replacement implemented for [0.73.3](./dsh-context/slim-headers) and [0.74.0](./dsh-context/slim-headers-0.74.0), not deployed** |

@@ -1,0 +1,23 @@
+list-after-restart.txt — POST /api/session/list directly against the running host
+(port 3080), after restarting dsh web on the patched module, 2026-10-26 14:38 CST.
+
+RPC envelope that works: {"type":"client-request","rpcId":"..","method":"session/list",
+"payload":{"args":{"_request":{}}}} — a bare {"args":{}} is rejected with
+"args fields do not match the descriptor: missing \"_request\"".
+
+POST /api/session/list -> 9861756 B in 5.04s
+rows: 2670
+top 5:
+   session-60f42574-76de-480b-8333-5fe0e6bb6ce2 10-26 14:38
+   0ae25ede-fe09-432a-b0f3-aadb4800fed6 10-26 14:31
+   968cf29e-a29f-46de-89dc-088776926d2f 10-26 14:22
+   d6213352-080e-4748-9efd-837bd6410e54 10-26 12:37
+   9e3cb5a2-1c19-4e92-9556-ac5269c41c63 10-26 12:32
+targets:
+  billion-context周检  updatedAt=10-26 09:30  rank 15/2670
+  记忆系统周复检       updatedAt=10-26 08:00  rank 17/2670
+  记忆系统日哨兵       updatedAt=10-26 12:00  rank 12/2670
+  SDK KPI 周报        updatedAt=10-26 12:13  rank 8/2670   (had a human prompt, control case)
+
+Host process start 14:37:27 CST; patch written 14:14 → the running host loaded it.
+Post-restart presence check: `node apply.mjs --check` -> PATCHED (marks=2).

@@ -7,6 +7,10 @@ last human prompt therefore stays stale until its next delivery. This script rew
 just `rows.sessionListMetadata.val.lastPromptAt` for sessions whose last *scheduled*
 delivery is newer, leaving `ver`, `seq` and every other projection row untouched.
 
+Session logs are read in both supported encodings: `session.v4.jsonl.zstd`
+(`compression: zstd`, the default) and plain `session.v4.jsonl`
+(`compression: none`).
+
 Safety:
   * only events with `seq <= row.seq` are considered (the cached watermark must stay
     truthful);
@@ -23,9 +27,8 @@ import datetime
 import glob
 import json
 import os
+import re
 import sys
-
-import zstandard  # pip install zstandard
 
 ROOT = os.environ.get('DSH_HOME') or os.path.expanduser('~/.dsh')
 ALL = '--all' in sys.argv
@@ -49,32 +52,57 @@ def targets():
     return out
 
 
+def log_paths(sid):
+    """Session log candidates, newest format generation first.
+
+    The extension follows the configured `compression`: `.jsonl.zstd` for zstd,
+    `.jsonl` for `compression: none`. Both are valid; neither is preferred for
+    reading, only for picking the highest generation.
+    """
+    paths = glob.glob(os.path.join(ROOT, 'sessions', '*', sid, 'session*.jsonl'))
+    paths += glob.glob(os.path.join(ROOT, 'sessions', '*', sid, 'session*.jsonl.zstd'))
+
+    def rank(path):
+        generation = re.search(r'session\.v(\d+)\.jsonl', os.path.basename(path))
+        return (int(generation.group(1)) if generation else 0, os.path.getmtime(path))
+
+    return sorted(set(paths), key=rank, reverse=True)
+
+
+def read_log(path):
+    with open(path, 'rb') as fh:
+        if path.endswith('.zstd'):
+            import zstandard  # pip install zstandard; only needed for compressed logs
+            # A session log is a concatenation of zstd frames; a single-frame read
+            # returns the header only, so read across frames.
+            return zstandard.ZstdDecompressor().stream_reader(fh, read_across_frames=True).read()
+        return fh.read()
+
+
 def fold(sid, seq):
     """Return (last human prompt, last scheduled delivery) inside the folded prefix."""
-    logs = sorted(glob.glob(os.path.join(ROOT, 'sessions', '*', sid, 'session*.jsonl.zstd')),
-                  key=os.path.getmtime)
-    if not logs:
-        return 0, 0
-    # A session log is a concatenation of zstd frames; a single-frame read returns the
-    # header only, so read across frames.
-    with open(logs[-1], 'rb') as fh:
-        raw = zstandard.ZstdDecompressor().stream_reader(fh, read_across_frames=True).read()
     human = sched = 0
-    for line in raw.decode('utf-8', 'replace').splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            event = json.loads(line)  # the tail frame may be torn
-        except Exception:
-            continue
-        if event.get('type') != 'user/message' or (event.get('seq') or 0) > seq:
-            continue
-        kind = (event.get('data') or {}).get('source', {}).get('kind')
-        if kind == 'user':
-            human = max(human, event['time'])
-        elif kind == 'schedule':
-            sched = max(sched, event['time'])
+    for path in log_paths(sid):
+        raw = read_log(path)
+        seen = False
+        for line in raw.decode('utf-8', 'replace').splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)  # the tail frame / line may be torn
+            except Exception:
+                continue
+            if event.get('type') != 'user/message' or (event.get('seq') or 0) > seq:
+                continue
+            seen = True
+            kind = (event.get('data') or {}).get('source', {}).get('kind')
+            if kind == 'user':
+                human = max(human, event['time'])
+            elif kind == 'schedule':
+                sched = max(sched, event['time'])
+        if seen:
+            break  # the highest-generation log that carries events wins
     return human, sched
 
 

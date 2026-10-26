@@ -7,6 +7,10 @@
  *   1. `applySessionListMetadata` — the list row's `lastPromptAt`
  *   2. the host `session/event` hook — the live `api-session/activity` signal
  *
+ * Each edit is applied independently, so a half-applied file (one hunk only, or a
+ * marker comment edited away by hand) converges to the same result instead of
+ * refusing to continue. The script never rewrites anything it cannot recognise.
+ *
  * Deliberately does NOT bump the projection `stateVersion`: existing cache rows
  * stay valid (no re-fold of thousands of sessions). Rows frozen before the patch
  * are healed by the next delivery, or by `heal-cache-rows.py`.
@@ -14,7 +18,7 @@
  * Usage:
  *   node apply.mjs                     # auto-detect the dsh install
  *   node apply.mjs --dsh-root <dir>    # explicit @deepseek-ai/dsh directory
- *   node apply.mjs --check             # report PATCHED / WIPED only
+ *   node apply.mjs --check             # report per-hunk state, exit 1 unless patched
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
@@ -23,11 +27,26 @@ import path from 'node:path';
 const MARK = '2026-10-26 local patch: schedule counts as activity';
 const REL = 'node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js';
 
-const A_OLD = 'const lastPromptAt = event.type === "user/message" && event.data.source.kind === "user" ? event.time : state.lastPromptAt;';
-const A_NEW = `/* ${MARK} (lastPromptAt) */\n\t${A_OLD.replace('event.data.source.kind === "user"', '(event.data.source.kind === "user" || event.data.source.kind === "schedule")')}`;
-
-const B_OLD = 'if (event.type !== "user/message" || event.data.source.kind !== "user") return;';
-const B_NEW = `/* ${MARK} (api-session/activity) */\n\t\t\t\tif (event.type !== "user/message" || (event.data.source.kind !== "user" && event.data.source.kind !== "schedule")) return;`;
+const EDITS = [
+  {
+    label: 'lastPromptAt',
+    oldLine: '\tconst lastPromptAt = event.type === "user/message" && event.data.source.kind === "user" ? event.time : state.lastPromptAt;',
+    newLine: '\tconst lastPromptAt = event.type === "user/message" && (event.data.source.kind === "user" || event.data.source.kind === "schedule") ? event.time : state.lastPromptAt;',
+  },
+  {
+    label: 'api-session/activity',
+    oldLine: '\t\t\t\tif (event.type !== "user/message" || event.data.source.kind !== "user") return;',
+    newLine: '\t\t\t\tif (event.type !== "user/message" || (event.data.source.kind !== "user" && event.data.source.kind !== "schedule")) return;',
+  },
+].map((edit) => {
+  // The marker comment carries the same indentation as the line it annotates.
+  const indent = edit.newLine.match(/^[\t ]*/)[0];
+  return {
+    ...edit,
+    block: `${indent}/* ${MARK} (${edit.label}) */\n${edit.newLine}`,
+    comment: `${indent}/* ${MARK} (${edit.label}) */`,
+  };
+});
 
 function arg(name) {
   const i = process.argv.indexOf(name);
@@ -43,8 +62,31 @@ function candidates() {
     if (root) out.push(path.join(root, '@deepseek-ai', 'dsh'));
   } catch { /* npm not on PATH */ }
   if (process.env.APPDATA) out.push(path.join(process.env.APPDATA, 'npm', 'node_modules', '@deepseek-ai', 'dsh'));
-  out.push('C:/Users/h00899877/npm-global/node_modules/@deepseek-ai/dsh');
+  out.push('/usr/local/lib/node_modules/@deepseek-ai/dsh');
   return out;
+}
+
+/**
+ * Classify one edit against the current source.
+ * @returns {{ state: 'patched' | 'pristine' | 'half' | 'miss', next?: string }}
+ *   `half` = the modified line survived but its marker comment did not;
+ *   `miss` = neither the original nor the modified line is present.
+ */
+function classify(src, edit) {
+  if (src.includes(edit.block)) return { state: 'patched' };
+  if (src.includes(edit.oldLine)) {
+    return { state: 'pristine', next: src.replace(edit.oldLine, edit.block) };
+  }
+  if (src.includes(edit.comment)) {
+    // marker without either predicate line is not a shape this patch produced
+    return { state: 'miss' };
+  }
+  if (src.includes(edit.newLine)) {
+    // modified predicate with the marker comment stripped (e.g. by an older
+    // partial-recovery path): restore the marker so presence checks work again
+    return { state: 'half', next: src.replace(edit.newLine, edit.block) };
+  }
+  return { state: 'miss' };
 }
 
 const checkOnly = process.argv.includes('--check');
@@ -54,25 +96,40 @@ if (!file) {
   process.exit(2);
 }
 console.log(`target: ${file}`);
-let src = readFileSync(file, 'utf8');
-const marks = src.split(MARK).length - 1;
+
+const original = readFileSync(file, 'utf8');
+const states = EDITS.map((edit) => ({ edit, ...classify(original, edit) }));
+for (const { edit, state } of states) console.log(`  ${edit.label}: ${state}`);
 
 if (checkOnly) {
-  console.log(marks === 2 ? 'PATCHED' : `WIPED (marks=${marks})`);
-  process.exit(marks === 2 ? 0 : 1);
+  const ok = states.every(({ state }) => state === 'patched');
+  console.log(ok ? 'PATCHED' : 'WIPED');
+  process.exit(ok ? 0 : 1);
 }
-if (marks === 2) {
+
+if (states.every(({ state }) => state === 'patched')) {
   console.log('already patched; nothing to do');
   process.exit(0);
 }
-if (marks === 1) {
-  // half-applied: strip our comment lines and fall through to a full replay
-  src = src.split('\n').filter((line) => !(line.includes(MARK) && line.trim().startsWith('/*'))).join('\n');
-  console.log('rolled back a partial patch');
+
+// Re-classify against the progressively edited text so each hunk is applied to the
+// result of the previous one (`original` would drop the earlier hunk).
+let next = original;
+const applied = [];
+const missing = [];
+for (const edit of EDITS) {
+  const step = classify(next, edit);
+  if (step.state === 'patched') continue;
+  if (step.state === 'miss') {
+    missing.push(edit.label);
+    continue;
+  }
+  next = step.next;
+  applied.push(`${edit.label} (${step.state === 'half' ? 'repaired' : 'applied'})`);
 }
-if (!src.includes(A_OLD) || !src.includes(B_OLD)) {
-  console.error('ANCHOR MISS — upstream shape changed; port manually (see README "Anchors")');
+if (missing.length > 0) {
+  console.error(`ANCHOR MISS (${missing.join(', ')}) — upstream shape changed; port manually (see README "Anchors"). File left untouched.`);
   process.exit(3);
 }
-writeFileSync(file, src.replace(A_OLD, A_NEW).replace(B_OLD, B_NEW));
-console.log('patched; marks=2 — restart `dsh web` for the host half to load it');
+writeFileSync(file, next);
+console.log(`patched: ${applied.join(', ')} — restart \`dsh web\` for the host half to load it`);

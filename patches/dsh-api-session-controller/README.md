@@ -25,7 +25,8 @@ session then falls back to `header.createdAt` — the whole list would briefly s
 creation dates. Keeping `stateVersion: 1` means old rows stay valid and every row
 self-corrects on its next delivery. Rows frozen before the patch can be healed
 immediately with `heal-cache-rows.py`, which rewrites only
-`rows.sessionListMetadata.val.lastPromptAt` (never `ver`/`seq`).
+`rows.sessionListMetadata.val.lastPromptAt` (never `ver`/`seq`) and reads session logs in
+both supported encodings — `.jsonl.zstd` and plain `.jsonl` (`compression: none`).
 
 ## Behaviour change (accepted by the reporter)
 
@@ -52,6 +53,12 @@ node apply.mjs                      # auto-detect the dsh install
 node apply.mjs --dsh-root <dir>     # explicit: the @deepseek-ai/dsh directory
 node apply.mjs --check              # PATCHED / WIPED only
 ```
+
+The two hunks are applied **independently**, so a half-applied file (one hunk only, or a
+marker comment edited away by hand) converges to the same result on the next run instead
+of refusing to continue; a real anchor change fails loud with exit 3 and leaves the file
+untouched. Verified against five starting states (pristine, each hunk alone, marker
+stripped, already patched) — every one lands on the same bytes as the deployed file.
 
 Then **restart `dsh web`**: the controller is a host-side module, loaded once at process
 start.

@@ -1,0 +1,15 @@
+fold-replay.txt — the patched applySessionListMetadata, extracted from the installed
+(patched) lib/index.js and replayed over three real session logs, 2026-10-26.
+
+$ node verify-session-activity.mjs
+billion-context        lastPromptAt= 2026/10/26 09:30:00 | list updatedAt= 2026/10/26 09:30:00 | lastHuman= 2026/10/20 21:06:10 | blank= false
+memory-weekly          lastPromptAt= 2026/10/26 08:00:01 | list updatedAt= 2026/10/26 08:00:01 | lastHuman= 2026/10/15 19:31:59 | blank= false
+memory-daily-sentinel  lastPromptAt= 2026/10/26 12:00:01 | list updatedAt= 2026/10/26 12:00:01 | lastHuman= 2026/10/21 10:42:01 | blank= false
+
+Before the patch these three sessions displayed 10-20 21:06 / 10-15 19:31 / 10-21 10:42
+(i.e. "5天前" / "10天前" / "5天前") although each had completed a scheduled run that
+morning. The verification extracts the real function text from the patched file:
+
+  const m = src.match(/function applySessionListMetadata\(state, event\) \{[\s\S]*?\n\}\n/)
+
+so it exercises the shipped code, not a re-implementation.

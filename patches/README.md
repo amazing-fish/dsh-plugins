@@ -1,12 +1,11 @@
 # patches
 
-> **ARCHIVED 2026-10-26 — snapshot, no longer synced.** This directory mirrors
-> one machine's local patch library as of the archival commit. The
-> authoritative, always-current copy is `~/.dsh/patches` on that machine
-> (`PATCHES.md` is the index, `check-patches.ps1` the verifier,
-> `apply-mnemon-patches.ps1` the replay tool). Patches applied after this
-> snapshot exist only there. Read these as historical reference diffs, not as
-> a live catalogue.
+> **LIVE again 2026-11-14** — unarchived: these patches remain load-bearing
+> (historical machine report: `check-patches.ps1` 32/32 OK; not current repository verification) and the issue tracker is back in service as
+> the patch ledger (e.g. [#18](../issues/18)). The authoritative, always-current
+> copy is still `~/.dsh/patches` on the machine (`PATCHES.md` is the index,
+> `check-patches.ps1` the verifier). Patches exist here as reference diffs and
+> upgrade-companion docs; post-snapshot changes are back-filled on each sync.
 
 Environment patches for bundled dependencies of DeepSeek Harness (and its
 memory stack) that are too small to ship as plugins but too annoying to lose
@@ -21,12 +20,14 @@ published package, `b/` is the patched local file. Re-apply by anchor and run
 
 | Patch | Package / version anchor | Status |
 | --- | --- | --- |
-| [openai-503-body](./openai-503-body) | openai@7.19.0 (bundled in @deepseek-ai/dsh 0.2.1-rc.2) | active |
-| [dsh-llm-pi-ai](./dsh-llm-pi-ai) — opencode-camo UA + reasoning-only retry | @deepseek-ai/dsh-llm-pi-ai@0.2.1-rc.2 | active |
-| [dsh-api-session-controller](./dsh-api-session-controller) — session-list activity also counts scheduled deliveries (time + order) | @deepseek-ai/dsh-api-session-controller@0.2.1-rc.2 | active |
-| [dsh-session-format-v0-to-v1](./dsh-session-format-v0-to-v1) — summary + descriptor-v2/cron compat | @deepseek-ai/dsh-session-format-v0-to-v1@0.2.1-rc.2 (identical to 0.2.0-rc.2) | active |
+| [openai-503-body](./openai-503-body) | openai@7.19.0 (bundled in @deepseek-ai/dsh 0.2.1-rc.5) | active |
+| [dsh-llm-pi-ai](./dsh-llm-pi-ai) — opencode-camo UA + reasoning-only retry | @deepseek-ai/dsh-llm-pi-ai@0.2.1-rc.5 | active |
+| [dsh-api-session-controller](./dsh-api-session-controller) — session-list activity also counts scheduled deliveries (time + order); conversation-first rendering ([patch](./dsh-api-session-controller/conversation-first@0.2.1-rc.5.patch)) | @deepseek-ai/dsh-api-session-controller@0.2.1-rc.5 | active |
+| [dsh-session-format-v0-to-v1](./dsh-session-format-v0-to-v1) — summary + descriptor-v2/cron compat | @deepseek-ai/dsh-session-format-v0-to-v1@0.2.1-rc.5 (identical pristine since rc.2) | active |
 | [dsh-mnemon](./dsh-mnemon) — recall timeout 120s, sync retain, bounded fan-out, hot-memory limits 51200/8192, per-workspace storage scope (profile-layer config patch) | dsh-mnemon@0.5.33, dsh-mnemon-provider-hindsight@0.5.6, dsh-mnemon-source-memory-spaces@0.5.22 | active |
-| [dsh-context](./dsh-context) — session-list bloat mitigation: contextHeaders stateVersion bump (stale-row eviction) + historical backfill mount removed | dsh-context@0.73.3 (anchor-based, no diff file) | **stopgap running; replacement implemented for [0.73.3](./dsh-context/slim-headers) and [0.74.0](./dsh-context/slim-headers-0.74.0), not deployed** |
+| [dsh-context](./dsh-context) — retain complete upstream data; incomplete slim recipe withdrawn | dsh-context@0.84.1 | **full-data baseline guard; no slimming performance benefit claimed; existing installation not changed** |
+| [dsh-win-bash-shell-gc](./dsh-win-bash-shell-gc) — v2 idle reclamation excludes active and uncertain runs ([#18](https://github.com/amazing-fish/dsh-plugins/issues/18)) | @linxin666/dsh-win-bash@0.4.8 / 0.4.18 | source/harness verified; working-machine deployment not verified |
+| [UPGRADE-COMPAT](./UPGRADE-COMPAT.md) — per-patch upgrade exposure, anchor fragility, porting precedents, next-core pre-flight checklist | core 0.2.1-rc.5 vs upstream 0.2.2-rc.1 | maintained |
 | [hindsight-api-engine](./hindsight-api-engine) — ONNX chunking/threads, length-sorted rerank | hindsight-api-slim==0.9.2 | active |
 | [flashrank-int8-map](./flashrank-int8-map) — bge-zh int8 model map | FlashRank==0.2.10 | active |
 | [dsh-sm-context-piano](./dsh-sm-context-piano.md) | managed as a fork of hjj345345/dsh-sm-context-piano | fork |
@@ -76,8 +77,11 @@ patches — no error, no warning:
   **not** required — relinking from the store alone restores pristine content)
 - Python env recreation (daemon side)
 
-Rule of thumb: after any install/upgrade, run a marker check against this
-index and re-apply what got wiped, then restart the affected process.
+After any install/upgrade, consult the current package-specific instructions.
+Do not treat markers or this historical index as proof of installation, or
+blindly re-apply withdrawn patches. B12 uses an exact full-data baseline check;
+B13 requires its complete v2 check. Disk state does not prove a running host
+loaded the code. Plan any required restart around active work.
 
 ## Conventions
 

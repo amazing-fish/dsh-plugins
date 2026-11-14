@@ -1,0 +1,12 @@
+{
+  "0.4.8": {
+    "tarball": "https://registry.npmjs.org/@linxin666/dsh-win-bash/-/dsh-win-bash-0.4.8.tgz",
+    "integrity": "sha512-pltISNtXkFo0t5OnaTndrxUgvHKAekTd/yFLRNuX/dKA154hwNLwsN8vdRoDe6D4sbnA5W0l3wMOtMnLLd96/Q==",
+    "indexSha256": "603653c2d4018d606cc4a2064ad3ee400d49485b1798eba0c13b3f5bc9f67064"
+  },
+  "0.4.18": {
+    "tarball": "https://registry.npmjs.org/@linxin666/dsh-win-bash/-/dsh-win-bash-0.4.18.tgz",
+    "integrity": "sha512-O+Y7rZfzQpuY/VNok2RcAAtOYiMfXtsju4FS+4JVAEsywzqTLuaCVqEiWeSFhOTqvALO772v+qmHXWG5Zdv0JQ==",
+    "indexSha256": "0634c7c7c79f766c5113ba5555ca698f02ad81b0b32ea14085e2e6272c59dcd9"
+  }
+}

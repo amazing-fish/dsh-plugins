@@ -1,65 +1,63 @@
-# dsh-context — slim-headers (B12)
+# dsh-context — B12 0.84.1 withdrawn; retain full upstream data
 
-`session/list` carries every session's `contextHeaders` projection: for each of a
-session's recent request headers it inlines the **full tool table** (name/tokens/
-plugin for every tool). On a machine with ~1.2k sessions this dominates the list
-response — measured 9.9 MB / 4.5 s before the patch.
+**Do not deploy the 0.84.1 slim recipe from #20.** Its complete headers/detail
+round trip was not implemented. This revision disables that recipe instead of
+activating a partial implementation. It does not install, restore, restart or
+change an existing host. Existing machine installations need inspection.
 
-slim-headers keeps the list wire small and moves the tool tables to the detail
-route:
+## What users retain, and what they do not gain
 
-- the list carries the **newest three** envelopes, each with `toolCount` and
-  `totalToolTokens` instead of the `tools` array;
-- the projection grows `epochCount` and `detail: true` so the client knows the
-  full tables arrive through the detail route's `headers` segment;
-- `stateVersion` stays `1` (a serve-time change — no row rewrite);
-- a host without a live detail channel serves the inline tables unchanged.
+Use the official, unpatched **dsh-context 0.84.1 host and client together**.
+This retains upstream tool arrays, historical header epochs, tool search,
+token views and difference calculations. It does **not** deliver the proposed
+three-envelope list reduction. Larger list payloads remain an unresolved cost.
+The earlier 9.9 MB → 2–3.1 MB / first-paint claims cannot be attributed to the
+repository's exact recipe and are not acceptance evidence for it.
 
-Result: list 9.9 MB → ~2.0–3.1 MB, first paint of a deep-linked session
-7.16 s → 1.1–1.4 s.
+## Why the recipe was withdrawn
 
-## Version history
+- `o.live` referenced an attribution object with only `ownerOf`; it was not the
+  actual detail gate. Simply switching to `s.live` would activate incomplete
+  data removal, not fix the design.
+- The official detail path serves contextTimeline, not the missing complete
+  headers epoch/tool segment; the client has no matching consumer.
+- Both client replacement needles matched zero times on the verified official
+  package, but the old script still reported APPLIED. Marker-only checks also
+  incorrectly reported success.
+- Bind-time wire schema selection failed when the live gate changed. Replacing
+  persisted Xs with the slim wire schema rejected legitimate v1 stored rows.
+- Adding counts alone cannot replace arrays. In particular, difference headers
+  contain only added tools; a retained total toolCount would mislabel additions.
 
-| Upstream | Porting shape |
-| --- | --- |
-| 0.74.0 / 0.75.1 | 8 conflicts each |
-| 0.77.0 | zero conflicts (2 files touched upstream only) |
-| 0.81.0 | architectural adaptation — `detailShadow`/fold rewrite, 19 files +419/−55 |
-| **0.84.1** | **anchor-translation port** (this patch): `index.js` 111 KB → 191 KB, identifiers fully reshuffled (`Ti`→`Us` …) but structurally isomorphic — `Qs` is still the full wire schema, `tc()` is still the `contextHeaders` projection, and the `.live` gate is intact |
+Source investigation and real Zod reproduction are recorded in
+[PR #20 review evidence](https://github.com/amazing-fish/dsh-plugins/pull/20#issuecomment-6875063282).
 
-## The patch (`slim-headers@0.84.1-*.patch`)
+## Safe inspection
 
-`index.js` (3 anchors):
+```sh
+node patches/dsh-context/patch-0.84.1.mjs --check --lib /absolute/path/to/dsh-context/lib
+```
 
-1. insert a slim wire schema (`B12_slim`) immediately before the full one (`Qs`);
-2. replace `tc()` with a version that takes a live-gate thunk: when the detail
-   channel is live it registers the slim schema and emits 3 envelopes with
-   `toolCount`/`totalToolTokens`/`epochCount`/`detail:true`; otherwise it behaves
-   exactly as upstream;
-3. pass `() => o.live` at the registration site.
+Without `--lib`, the historical `~/.dsh/profiles/web/node_modules/dsh-context/lib`
+location is inspected. `--check` returns 0 only for the exact official 0.84.1
+index.js + client.js bytes, reporting **FULL_DATA_UNPATCHED**, never APPLIED.
+Missing, modified, mixed-version or historical slim files fail. This is not a
+universal version checker: even a legitimate other version needs its own review.
+A passing disk check does not prove a running process loaded those files.
 
-`client.js` (3 tool-count fallbacks) — with slim, `header.tools` is empty, so every
-count has to come from `toolCount`:
+Normal apply and `--revert` now return nonzero **without writes**. In particular,
+old `*.pristine-slim` files are not blindly copied: their origin may be unknown.
+For an already modified installation, inspect differences and restore the
+verified official package pair through the normal package workflow during an
+appropriate maintenance window. Preserve local changes/backups first. This PR
+performs none of those machine operations and does not stop Bridge/Ghost.
 
-- the category-count helper (`tools` branch);
-- the `browser.items` label;
-- the category-existence predicate.
+## Follow-up acceptance for real slimming
 
-Verified: `node --check` on both files; `check-patches.ps1` B12 green; upstream
-`temp`/`live` mechanisms untouched.
-
-## Caveat that matters when re-testing
-
-The slim path only engages once the **detail route is live** (`live = true`). A
-freshly started isolated instance measured **12.9 MB** while the long-running
-production host measured **3.06 MB** with the same patched lib — the difference is
-the gate, not the patch. Measure after a normal start, not on a cold isolated
-instance.
-
-## Re-apply
-
-Machine-local script `~/.dsh/patches/patch-dsh-context-0.84.1.mjs`
-(`--check` / `--revert`; pristine backups as `*.pristine-slim`).
-Markers: `B12 slim-headers`, `B12_slim`.
-
-Requires a `dsh web` restart (host-side module).
+A separate host/client implementation must provide a complete headers detail
+channel, retain v1 state, accept both wire states across gate transitions, and
+prove cold/live/reconnect behavior, old epoch selection, search, token totals,
+and difference counts against the unpatched baseline. Until then retain full
+data; do not treat a marker, smaller response or syntax check as compatibility.
+Older 0.73/0.74/0.81 artifacts remain historical; this notice does not validate
+or deploy them on 0.84.1.

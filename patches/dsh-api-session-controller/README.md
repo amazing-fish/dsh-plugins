@@ -69,3 +69,31 @@ start.
   `lastPromptAt` lands on the delivery time instead of the last human prompt.
 - `list-after-restart.txt` — `POST /api/session/list` after a restart: the three
   previously stuck sessions report today's delivery times, ranked 12/15/17 of 2670.
+
+
+---
+
+## Conversation-first rendering (`conversation-first@0.2.1-rc.5.patch`, A16/A17)
+
+Second defect in the same controller, fixed 2026-10-26: opening a session by id
+from a fresh tab waits for the full `session/list` (multi-MB) before rendering,
+because (1) `manager.resolveTarget()` throws `sessions.retain: unknown session`
+for any id missing from the list summaries, and (2) `projectList()` only builds
+placeholder rows for subagent addresses, so a retained top-level session has no
+row in `ListSnapshot.byId` and the workspace never mounts the main view.
+
+The patch (client half, 5 self-marked anchors, effective on page refresh
+without restart):
+
+- A16 — allow `^session-` ids through `resolveTarget()`;
+- A17a — build placeholder rows for retained top-level sessions too;
+- A17b — conditional expansion of `parentId`/`origin`;
+- A17c — re-project for any retained id missing a row;
+- A17d — placeholder `updatedAt: lastPromptAt ?? Date.now()` (avoids
+  "56 years ago" side-bar artifacts until the real list arrives).
+
+Measured: first paint of a deep-linked session 7.16 s → 1.08–1.39 s while
+`session/list` itself still takes 6–7 s (fully decoupled). Replay tool:
+machine-local `~/.dsh/patches/apply-conversation-first.mjs` (5 idempotent
+anchors + `--check`); markers `A16 conversation-first` / `A17 conversation-first`.
+Replayed verbatim on 0.2.1-rc.5 (pristine identical to rc.2 for this file).

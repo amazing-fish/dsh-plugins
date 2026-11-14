@@ -1,0 +1,63 @@
+diff --git a/dsh-api-session-controller/lib/client.js b/dsh-api-session-controller/lib/client.js
+index c246e9d..0b58956 100644
+--- a/dsh-api-session-controller/lib/client.js
++++ b/dsh-api-session-controller/lib/client.js
+@@ -3007,7 +3007,12 @@ window.__ModuleLoader__.load({
+ 			resolveTarget(target) {
+ 				const id = typeof target === "string" ? target : target.childSessionId;
+ 				const address = typeof target === "string" ? this.subagentAddress(id) : target;
+-				if (typeof target === "string" && !this.sessions.has(id) && !this.summaries.some((summary) => summary.sessionId === id) && address === void 0) throw new Error(`sessions.retain: unknown session ${id}`);
++				if (typeof target === "string" && !this.sessions.has(id) && !this.summaries.some((summary) => summary.sessionId === id) && address === void 0) {
++					// 2026-10-26 local patch (A16 conversation-first): a durable session id may be opened before
++					// session/list has landed (deep-link / toast-click path). A bogus id now fails asynchronously
++					// at open() instead of here, so real errors still surface.
++					if (!/^session-/.test(id)) throw new Error(`sessions.retain: unknown session ${id}`);
++				}
+ 				if (address !== void 0) this.addresses.set(id, address);
+ 				this.sessions.get(id)?.configureSubagent(address, address === void 0 ? void 0 : this.agentAvailable(address.parentSessionId));
+ 				return id;
+@@ -4081,7 +4086,8 @@ window.__ModuleLoader__.load({
+ 					if (count === 0) this.retireScope(id, record);
+ 					else this.publishRetention(id);
+ 				});
+-				if (this.list.getSnapshot().byId[id] === void 0 && this.manager.subagentAddress(id) !== void 0) this.projectList();
++				// 2026-10-26 local patch (A17): re-project for any retained id missing a row, not only subagents.
++				if (this.list.getSnapshot().byId[id] === void 0) this.projectList();
+ 				this.publishRetention(id);
+ 				return reference;
+ 			}
+@@ -4194,8 +4200,11 @@ window.__ModuleLoader__.load({
+ 				for (const [id, record] of this.scopes) {
+ 					if (byId[id] !== void 0) continue;
+ 					const address = this.manager.subagentAddress(id);
+-					if (address === void 0) continue;
++					// 2026-10-26 local patch (A17 conversation-first): a directly retained top-level Session
++					// also needs a provisional row before session/list lands, otherwise the main pane finds
++					// no retained mainView row and renders nothing while the list is still loading.
+ 					const previous = previousById[id];
++					if (address === void 0 && previous === void 0 && Object.keys(record.retention.retainedBy).length === 0) continue;
+ 					const snapshot = record.session.getSnapshot();
+ 					const projectionValues = this.manager.projectionValues(id);
+ 					const projectedTitle = projectionValues?.title;
+@@ -4204,13 +4213,18 @@ window.__ModuleLoader__.load({
+ 						...previous ?? {
+ 							id,
+ 							displayTitle: id,
+-							updatedAt: 0
++							// 2026-10-26 local patch (A17d): a real summary time is unavailable before the list
++							// lands; Date.now() renders as "刚刚" and the arriving list replaces the row within
++							// seconds. Leaving 0 / undefined renders "56年" / "NaN年" instead.
++							updatedAt: projectionValues?.sessionListMetadata?.lastPromptAt ?? Date.now()
+ 						},
+ 						running: snapshot.running,
+ 						retainedBy: record.retention.retainedBy,
+ 						blank: snapshot.blank,
+-						parentId: address.parentSessionId,
+-						origin: "subagent",
++						...address === void 0 ? {} : {
++							parentId: address.parentSessionId,
++							origin: "subagent"
++						},
+ 						...projectionValues === void 0 ? {} : { projectionValues },
+ 						...title === void 0 ? {} : {
+ 							title,

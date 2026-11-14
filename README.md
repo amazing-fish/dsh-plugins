@@ -1,27 +1,19 @@
 # DSH Plugins
 
-> **ARCHIVED 2026-10-26 — this repository is read-only.**
+# DSH Plugins
+
+> **LIVE again 2026-11-14** — unarchived: the patches here remain load-bearing
+> (`check-patches.ps1` 30+ items green; B13 added 2026-11-14), and the issue
+> tracker is back in service as the patch ledger.
 >
-> It served two purposes and both have run their course:
->
-> - **Plugins** — `skill-fuzzy-match` was retired (DSH core ≥ 0.2.0 ships
->   native `rankByName` in `dsh-client-ui-primitives`, called directly by
->   `dsh-client-ui-skill`; see
->   [deepseek-harness#4490](https://github.com/deepseek-ai/deepseek-harness/discussions/4490)).
->   It is removed from this tree and remains only in git history. Active
->   plugin development lives in its own repositories — e.g.
+> - **Plugins** — `skill-fuzzy-match` stays retired (DSH core ≥ 0.2.0 ships
+>   native `rankByName`; removed from this tree, survives in git history).
+>   Active plugin development lives in its own repos — e.g.
 >   [`amazing-fish/dsh-piano-nav`](https://github.com/amazing-fish/dsh-piano-nav),
 >   [`amazing-fish/dsh-sysnotify`](https://github.com/amazing-fish/dsh-sysnotify).
-> - **Patches** — [`patches/`](./patches) was a mirror of one machine's local
->   patch library. The authoritative copy is (and always was)
->   `~/.dsh/patches` on that machine (`PATCHES.md` + `check-patches.ps1`);
->   the files here are reference diffs kept for history. **No further sync
->   will be pushed to this repository** — anything newer than the last commit
->   exists only in that local library.
->
-> Nothing here is needed to run DSH. Clone it if you want the historical
-> diffs; do not expect updates.
-
+> - **Patches** — [`patches/`](./patches) mirrors one machine's local
+>   `~/.dsh/patches` (the authoritative copy). New patch records are filed as
+>   issues in this repo (e.g. [#18](../../issues/18)).
 A historical collection of plugins and UI extensions for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), plus reference diffs for environment patches.
 
 ## Plugins (as of archival)

@@ -1,64 +1,69 @@
-# 升级前置硬约束：先停光 dsh 进程，再装 core
+# DSH 升级前置与生效验收：先核对占用，再完成所有 profile 的闭环
 
-> 来源：2026-11-14 core `0.2.1-rc.5 → 0.2.2-rc.3` 升级实证。同款记录已写入本机
-> `~/.dsh/patches/PATCHES.md` 顶部（权威运维面）。
+> 来源：2026-11-14 Windows core 0.2.1-rc.5 → 0.2.2-rc.3 升级事故，以及
+> [#18 工作机验收](https://github.com/amazing-fish/dsh-plugins/issues/18#issuecomment-6875488402)、
+> [#22 工作机验收](https://github.com/amazing-fish/dsh-plugins/issues/22#issuecomment-6875488604)。
+> 本文是操作指引，不表示已经停止、升级、重启或验收任何机器。
 
-## 硬约束
+## 1. 先确定要升级哪份安装、谁在使用
 
-**`npm install -g @deepseek-ai/dsh@<ver>` 必须在 DSH 进程全部停止的状态下执行。**
+本次事故中，长期运行的 acp profile 加载了目标安装内的 koffi.node，
+只停止 web 并没有释放目标文件；npm copyfile 报 EBUSY。升级中断后还发现
+旧安装缺文件，因此不能认为失败重试总是无害。
 
-## 为什么
+这说明必须核实**目标安装的相关占用者**，不是“所有名字像 DSH 的进程必须强杀”。
+不同安装或隔离环境可能不共享同一文件；任何 profile 也不一定已经加载原生模块。
+不要根据进程名称、端口或 bin.js 模糊匹配直接批量 Stop-Process -Force。
 
-core 内含原生模块 `@koromix/koffi-win32-x64/win32_x64/koffi.node`。任何 dsh 进程一旦
-加载它，就把它映射进自己的地址空间；Windows 对已映射的 `.node` 持有独占句柄。
+- 记录目标安装绝对路径、当前/目标版本、web/acp/headless 等实际使用的 profile。
+- 枚举对应命令行、PID、启动时间和活动任务，确认是否使用同一安装。
+- 若有重要任务，先完成或转移；在维护窗口正常退出相关宿主。
+- 安装仍报文件占用时，定位实际持有者再处理，不无边界扩大停止范围。
+- 保留现有配置、锁文件和补丁快照，记录恢复路径；不覆盖未知旧备份。
 
-npm 安装全局包时**先把内容复制到同级暂存目录**（`@deepseek-ai/.dsh-<随机后缀>`）再切换。
-复制阶段就要打开源文件 → 撞锁：
+## 2. 升级 core 不等于升级 profile
 
-```
-EBUSY: resource busy or locked, copyfile
-  ...\dsh\node_modules\@koromix\koffi-win32-x64\win32_x64\koffi.node
-  -> ...\@deepseek-ai\.dsh-<rand>\...\koffi.node
-errno -4082
-```
+全局 core 与每个 profile 的 package.json / node_modules 是独立层。
+只同步 web 的 settings/mcp-client 会漏掉 headless，#22 已真实复现：
+core rc.3 + headless rc.5 导致插件禁用，但调用仍可能 rc=0、无 sid、无正文。
 
-## 易踩的三个坑
+升级前后都要遍历**实际使用的所有 profile**，不是只看 web：
+检查声明版本、实际解析版本、精确 peer 要求和 incompatible 日志。
+归档/备份目录单独标识，不把它们当正在使用的 profile。
+按具体包的兼容契约判断，不把所有 @deepseek-ai 包一律强制改成 core 同号。
 
-1. **只停 `dsh web` 不够。** 本次实际的锁持有者是自 11-03 长驻的 `dsh --profile acp`
-   （PID 33104）。既有的 `update-dsh-core-*.ps1` 只杀 `...bin.js ... web` 与 3080 端口，
-   漏掉了 acp profile。**任何 `--profile <其它>` 的实例都持有同一份 koffi.node。**
-2. **半途中断会掏空旧树。** 本次失败后实测 `undici` 仅 133/214 个文件、54 个嵌套包 0 文件，
-   `dsh web` 随即报 `MODULE_NOT_FOUND` / V8 `Zone Allocation failed`。失败并非总是无害。
-3. **中断后不要直接重跑。** 先核对旧树完整性（`undici` 文件数、嵌套包非空），必要时
-   干净重装，否则会在残缺树上叠加。
+安装中断时，先核对目标版本包完整性及依赖解析，再决定恢复或重装；
+本次观察到的 undici 214 个文件只是当时版本证据，不是跨版本通用成功阈值。
 
-## 固定顺序
+## 3. 补丁只按当前入口处理
 
-```
-停所有 dsh 进程（按 bin.js 全杀，web + acp + headless 等）
-  → 装 core（+ dsh-settings / dsh-mcp-client 同步钉版）
-  → 重放补丁（A 组按新版锚点移植，B 组 apply-mnemon-patches.ps1）
-  → 启宿主
-```
+- B13：按当前 [v2 指引](patches/dsh-win-bash-shell-gc/README.md)应用及完整检查。
+  活跃/未知生命周期保护不能被旧 v1 reference patch 覆盖。
+- B12：0.84.1 残缺 slim 已撤下，按[完整数据基线指引](patches/dsh-context/README.md)核验。
+  不重放旧瘦身脚本；恢复备份前必须证明其完整来源，不能只看文件名。
+- 其他补丁按各自当前版本说明核验；缺锚点、漂移、未知备份先分析，不强行覆盖。
+- 本机 check-patches.ps1 和 apply-mnemon-patches.ps1 当前未随此文收录，
+  历史 32/32、35/35 计数不等于最新仓库或运行宿主验证。
 
-全杀命令（按 `bin.js` 匹配，不要只匹配 `web`）：
+## 4. 分清四层结果，最后必须实际运行
 
-```powershell
-Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-  Where-Object { $_.CommandLine -like '*@deepseek-ai\dsh\lib\bin.js*' } |
-  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-```
+| 层次 | 需要什么证据 | 不能替代什么 |
+| --- | --- | --- |
+| 仓库 | 最新 main/PR 的精确 SHA、差异与测试 | 不证明机器已部署 |
+| 磁盘 | 实际解析路径、版本、双文件/补丁完整检查和适用哈希 | 不证明旧进程已加载 |
+| 进程 | 正常重启目标宿主后记录新 PID、路径、版本与启动日志 | PID 或 mtime 本身不是模块加载证明 |
+| 功能 | 对本次变更的真实调用与预期结果 | HTTP 200 或 rc=0 不等于任务完成 |
 
-## 事后核验（rc.3 实测，可作模板）
+文件 mtime 早于宿主启动，只能说明文件此前已在磁盘，不能证明进程用了
+该路径或加载了该模块。工作机本轮明确尚未重启，不能将 B13 磁盘 v2 说成运行态 v2。
 
-| 检查 | 期望 |
-| --- | --- |
-| `dsh --version` | 目标版本 |
-| `undici` 文件数 | 214/214 |
-| 嵌套包 0 文件数 | 0 |
-| `dsh --dump-config` | exit 0 |
-| `check-patches.ps1` | 32/32 |
-| `dsh web` | HTTP 200 |
-
-**加载态还要单独核**：补丁文件 mtime 必须早于宿主进程启动时间，才说明宿主真载入了
-（磁盘在位 ≠ 宿主已加载，ESM 缓存要重启）。
+最小验收：
+1. 对每个使用的 profile 检查配置与 incompatible 状态；headless 用真实文本调用，
+   同时核对 rc、sid 和期望正文，不只看退出码。
+2. B13 在已加载最新代码的宿主验证：长命令期间另一 owner 触发清理不误杀；
+   旧空闲 shell 新开短命令不误杀；真正空闲仍能回收。harness 通过不代替真实进程验收。
+   可在隔离实例缩短阈值，不修改生产阈值来冒充同等验证。
+3. B12 确认完整数据及历史/搜索/计数等关键功能；不声称已完成性能瘦身，
+   后续减量单独由 [#25](https://github.com/amazing-fish/dsh-plugins/issues/25) 跟踪。
+4. 工作机采用最新相关 PR 代码（即使未合入），记录精确 SHA 和部署路径。
+   文件、图片与完整日志留在工作机，仅在 issue 提交必要文字版本、步骤、结果与未验边界。

@@ -120,9 +120,7 @@ let text = readFileSync(TARGET, 'utf8');
 const results = [];
 
 for (const edit of EDITS) {
-    const done = edit.doneWhen !== undefined
-        ? text.includes(edit.doneWhen)
-        : text.includes(edit.marker);
+    const done = text.includes(edit.to); // A marker alone is not an installed edit.
     if (done) {
         results.push({ id: edit.id, state: 'OK', name: edit.name });
         continue;
@@ -133,15 +131,16 @@ for (const edit of EDITS) {
         continue;
     }
     text = text.replace(edit.from, edit.to);
-    results.push({ id: edit.id, state: 'APPLIED', name: edit.name });
+    results.push({ id: edit.id, state: CHECK ? 'MISSING' : 'APPLIED', name: edit.name });
 }
 
 const bad = results.filter(r => r.state !== 'OK' && r.state !== 'APPLIED');
 
 if (CHECK) {
+    const missing = results.filter(r => r.state !== 'OK');
     for (const r of results) console.log(`  [${r.state.padEnd(8)}] ${r.id}  ${r.name}`);
-    if (bad.length > 0) {
-        console.error(`\n[FAIL] ${bad.length} 处缺失/漂移，需人工按 PATCHES.md A⑯/A⑰ 重打`);
+    if (missing.length > 0) {
+        console.error(`\n[FAIL] ${missing.length} 处缺失/漂移，需人工按 PATCHES.md A⑯/A⑰ 重打`);
         process.exit(1);
     }
     console.log('\n[OK] conversation-first (A16+A17) 全部在位');

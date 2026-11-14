@@ -1,0 +1,63 @@
+diff --git a/dsh-win-bash/lib/index.js b/dsh-win-bash/lib/index.js
+index 6300186..0a73348 100644
+--- a/dsh-win-bash/lib/index.js
++++ b/dsh-win-bash/lib/index.js
+@@ -1235,6 +1235,7 @@ var ShellRegistry = class {
+ 			if (frame.outcome !== void 0) {
+ 				const result = complete(frame.outcome, stdout, stderr, budget);
+ 				resume();
++				shell.lastUsedAt = this.now();
+ 				return result;
+ 			}
+ 			if (shell.exited) {
+@@ -1289,7 +1290,40 @@ var ShellRegistry = class {
+ 	* @param signal - cancellation while the shell starts.
+ 	* @returns the live shell record.
+ 	*/
++	/**
++	 * Reclaim shells no command has used for DSH_WIN_BASH_IDLE_MS (default 30 min).
++	 *
++	 * The registry keys shells by the calling agent and releases them only on
++	 * `agent/disposed`, which Cordis emits when the owning FIBER is disposed —
++	 * a subagent that simply finishes never triggers it, so its shell outlives the
++	 * work by hours (measured: 19 shells / 522 MB, oldest 27.8 h). Sweeping on
++	 * ensure() bounds that leak without changing ownership semantics: the calling
++	 * owner's own shell is never touched, and a reclaimed shell costs one bash
++	 * restart the next time its session really needs it.
++	 *
++	 * @param keep - the owner whose shell must survive this sweep.
++	 */
++	async sweepIdle(keep) {
++		if (this.shells.size === 0) return;
++		const idleMs = Number(process.env.DSH_WIN_BASH_IDLE_MS || 1800000) || 1800000;
++		const now = this.now();
++		const victims = [];
++		for (const [owner, shell] of [...this.shells]) {
++			if (owner === keep) continue;
++			if (shell.exited) { victims.push(owner); continue; }
++			const last = typeof shell.lastUsedAt === "number" ? shell.lastUsedAt : now;
++			if (now - last >= idleMs) victims.push(owner);
++		}
++		if (victims.length === 0) return;
++		for (const owner of victims) {
++			const shell = this.shells.get(owner);
++			this.shells.delete(owner);
++			if (shell !== void 0) await terminate(shell, "idle reclamation");
++		}
++		this.ctx?.logger?.debug?.(`win-bash: reclaimed ${victims.length} idle shell(s)`);
++	}
+ 	async ensure(owner, runtime, cwd, signal) {
++		await this.sweepIdle(owner);
+ 		const existing = this.shells.get(owner);
+ 		if (existing !== void 0 && !existing.exited) return existing;
+ 		if (existing !== void 0) this.shells.delete(owner);
+@@ -1317,7 +1351,8 @@ var ShellRegistry = class {
+ 				stdout: 0,
+ 				stderr: 0
+ 			},
+-			exitCode: null
++			exitCode: null,
++			lastUsedAt: this.now()
+ 		};
+ 		const markExited = (outcome) => {
+ 			shell.exitCode = outcome.exitCode;

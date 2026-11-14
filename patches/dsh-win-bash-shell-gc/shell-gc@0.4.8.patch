@@ -1,57 +1,79 @@
-diff --git a/dsh-win-bash/lib/index.js b/dsh-win-bash/lib/index.js
-index 6300186..0a73348 100644
 --- a/dsh-win-bash/lib/index.js
 +++ b/dsh-win-bash/lib/index.js
-@@ -1235,6 +1235,7 @@ var ShellRegistry = class {
+@@ -1186,6 +1186,7 @@
+ 	subprocess;
+ 	now;
+ 	shells = /* @__PURE__ */ new Map();
++	activeRuns = new Map();
+ 	/**
+ 	* @param subprocess - the host's managed subprocess seam.
+ 	* @param now - clock, injected so tests run without real waiting.
+@@ -1213,7 +1214,12 @@
+ 	* @returns the command's complete result.
+ 	*/
+ 	async run(owner, runtime, cwd, command, budget) {
+-		const shell = await this.ensure(owner, runtime, cwd, budget.signal);
++		// B13 active-run lease v2: acquire before ensure() can yield to another owner.
++		this.activeRuns.set(owner, (this.activeRuns.get(owner) ?? 0) + 1);
++		let shell;
++		let commandFinished = false;
++		try {
++			shell = await this.ensure(owner, runtime, cwd, budget.signal);
+ 		const marker = markerFor(randomUUID());
+ 		const stdout = new StreamTail("stdout", shell.cursor.stdout);
+ 		const stderr = new StreamTail("stderr", shell.cursor.stderr);
+@@ -1233,6 +1239,7 @@
+ 			const frame = readFrame(shell, stdout, stderr, marker, sawBegin);
+ 			sawBegin ||= frame.text.includes(marker.begin);
  			if (frame.outcome !== void 0) {
++				commandFinished = true;
  				const result = complete(frame.outcome, stdout, stderr, budget);
  				resume();
-+				shell.lastUsedAt = this.now();
  				return result;
- 			}
- 			if (shell.exited) {
-@@ -1289,7 +1290,40 @@ var ShellRegistry = class {
+@@ -1280,6 +1287,19 @@
+ 				setTimeout(resolve, POLL_INTERVAL_MS);
+ 			});
+ 		}
++		} catch (error) {
++			// A reader/write failure does not prove the command stopped.
++			if (shell !== void 0 && this.shells.get(owner) === shell && !commandFinished && !shell.exited) shell.gcUncertain = true;
++			throw error;
++		} finally {
++			const remaining = this.activeRuns.get(owner) - 1;
++			if (remaining > 0) this.activeRuns.set(owner, remaining);
++			else this.activeRuns.delete(owner);
++			// Do not refresh a replacement shell belonging to a later call.
++			if (shell !== void 0 && this.shells.get(owner) === shell) {
++				shell.lastUsedAt = this.now();
++			}
++		}
+ 	}
+ 	/**
+ 	* Get the owner's live shell, starting one when absent.
+@@ -1289,7 +1309,22 @@
  	* @param signal - cancellation while the shell starts.
  	* @returns the live shell record.
  	*/
-+	/**
-+	 * Reclaim shells no command has used for DSH_WIN_BASH_IDLE_MS (default 30 min).
-+	 *
-+	 * The registry keys shells by the calling agent and releases them only on
-+	 * `agent/disposed`, which Cordis emits when the owning FIBER is disposed —
-+	 * a subagent that simply finishes never triggers it, so its shell outlives the
-+	 * work by hours (measured: 19 shells / 522 MB, oldest 27.8 h). Sweeping on
-+	 * ensure() bounds that leak without changing ownership semantics: the calling
-+	 * owner's own shell is never touched, and a reclaimed shell costs one bash
-+	 * restart the next time its session really needs it.
-+	 *
-+	 * @param keep - the owner whose shell must survive this sweep.
-+	 */
++	/** Recheck identity and active leases after every asynchronous termination. */
 +	async sweepIdle(keep) {
-+		if (this.shells.size === 0) return;
-+		const idleMs = Number(process.env.DSH_WIN_BASH_IDLE_MS || 1800000) || 1800000;
-+		const now = this.now();
-+		const victims = [];
++		const configured = Number(process.env.DSH_WIN_BASH_IDLE_MS ?? 1800000);
++		const idleMs = Number.isFinite(configured) && configured > 0 ? configured : 1800000;
 +		for (const [owner, shell] of [...this.shells]) {
-+			if (owner === keep) continue;
-+			if (shell.exited) { victims.push(owner); continue; }
-+			const last = typeof shell.lastUsedAt === "number" ? shell.lastUsedAt : now;
-+			if (now - last >= idleMs) victims.push(owner);
-+		}
-+		if (victims.length === 0) return;
-+		for (const owner of victims) {
-+			const shell = this.shells.get(owner);
++			if (owner === keep || this.activeRuns.has(owner) || this.shells.get(owner) !== shell) continue;
++			if (shell.gcUncertain && !shell.exited) continue;
++			const last = shell.lastUsedAt;
++			if (!shell.exited && (typeof last !== 'number' || this.now() - last < idleMs)) continue;
++			// Deletion is synchronous with the eligibility check. Never delete a new record.
 +			this.shells.delete(owner);
-+			if (shell !== void 0) await terminate(shell, "idle reclamation");
++			await terminate(shell, 'idle reclamation');
 +		}
-+		this.ctx?.logger?.debug?.(`win-bash: reclaimed ${victims.length} idle shell(s)`);
 +	}
  	async ensure(owner, runtime, cwd, signal) {
 +		await this.sweepIdle(owner);
  		const existing = this.shells.get(owner);
  		if (existing !== void 0 && !existing.exited) return existing;
  		if (existing !== void 0) this.shells.delete(owner);
-@@ -1317,7 +1351,8 @@ var ShellRegistry = class {
+@@ -1317,7 +1352,8 @@
  				stdout: 0,
  				stderr: 0
  			},
